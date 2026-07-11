@@ -20,3 +20,11 @@ ComfyUI 본체, Python 런타임, 모델 파일, LoRA 파일, 생성 이미지, 
 5. 빈칸이거나 일치하지 않으면 캐릭터 LoRA 노드를 요청 그래프에서 제거합니다.
 
 자세한 설치와 검증 방법은 `integration/README.md`와 `hooking_manager/README.md`를 참고하세요.
+
+## 저장소 자체 검증
+
+모델이나 ComfyUI 설치 없이 게시된 모듈, 워크플로, 런처와 Hooking Manager 패치의 계약을 확인할 수 있습니다.
+
+```powershell
+python -m unittest discover -s integration/tests -v
+```

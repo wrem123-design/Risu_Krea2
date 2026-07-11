@@ -1,0 +1,1315 @@
+diff --git a/DESIGN.md b/DESIGN.md
+new file mode 100644
+index 0000000..dbebd3c
+--- /dev/null
++++ b/DESIGN.md
+@@ -0,0 +1,87 @@
++# Hooking Manager Design Contract
++
++## 1. Atmosphere / signature
++
++Dense dark-native operator console. Information is arranged as compact rows with clear column ownership, restrained borders, and one coral accent inherited from the existing manager. The Krea2 LoRA screen should feel like a native maintenance surface, not a promotional dashboard.
++
++## 2. Color
++
++- `--bg: #1a1a2e`: application background.
++- `--surface: #16213e`: primary panel background.
++- `--surface2: #0f3460`: raised controls and secondary panels.
++- `--accent: #e94560`: selected navigation, primary actions, and focus emphasis.
++- `--accent2: #533483`: hover emphasis inherited from the application.
++- `--text: #eeeeee`: primary text.
++- `--text2: #aaaaaa`: secondary text.
++- `--border: #333333`: standard separator.
++- `--success: #4caf50`: connected and valid states.
++- `--warn: #ff9800`: unmapped and stale states.
++- `--error: #f44336`: failed load and invalid input states.
++- `--krea-row: #111c36`: compact LoRA row background.
++- `--krea-input: #0d1830`: editable field background.
++- `--krea-focus: rgba(233, 69, 96, 0.22)`: focus halo.
++- `--krea-content-width: 1200px`: maximum mapping surface width.
++- `--krea-control-height: 38px`: shared input and action height.
++
++Primary text on the application surfaces and white text on the coral accent meet the existing product contrast convention. Secondary text is used only for supporting copy and metadata.
++
++## 3. Typography
++
++- UI stack: `Segoe UI`, `Malgun Gothic`, sans-serif, retained for application consistency.
++- Screen title: `1.15rem`, weight `600`, line height `1.3`.
++- Body: `0.88rem`, weight `400`, line height `1.5`.
++- Label: `0.76rem`, weight `600`, line height `1.35`.
++- Metadata and helper text: `0.72rem`, weight `400`, line height `1.4`.
++- Filename: `Consolas`, `D2Coding`, monospace at `0.78rem`, weight `400`, line height `1.4`.
++
++## 4. Spacing
++
++Base unit is `4px`.
++
++- `--space-1: 4px`
++- `--space-2: 8px`
++- `--space-3: 12px`
++- `--space-4: 16px`
++- `--space-5: 20px`
++- `--space-6: 24px`
++- `--space-8: 32px`
++
++The Krea2 table uses `8px` row gaps, `12px` internal padding, and `16px` section gaps.
++
++## 5. Components
++
++### Krea2 toolbar
++
++Uses `--surface`, a `1px` `--border` boundary, `12px` padding, and `8px` gaps. Primary refresh uses `--accent`; secondary controls use `--surface2`. All buttons use a `6px` radius.
++
++### LoRA mapping row
++
++Desktop layout is a four-column grid: status and filename, immutable source strength, editable character name, editable applied strength. Columns are `minmax(260px, 1.6fr) 120px minmax(220px, 1fr) 180px`. Background is `--krea-row`, border is `--border`, padding is `12px`, and radius is `8px`. At `700px` and below it becomes a single column without horizontal scrolling.
++
++### Editable input
++
++Background `--krea-input`, text `--text`, border `--border`, padding `8px`, radius `6px`. Focus uses `--accent` border and `--krea-focus` halo. Invalid values use `--error`. Disabled and read-only values use `--text2`.
++
++### Status badge
++
++Plain bordered label, not a decorative pill. Mapped uses `--success`; unmapped uses `--warn`; missing uses `--error`.
++
++### Empty, loading, and error panels
++
++Use the standard row boundary and `16px` padding. Loading text uses `--text2`; empty uses `--warn`; errors use `--error` and retain the retry button.
++
++## 6. Motion
++
++Controls use the existing `0.2s` transition convention. New motion is limited to color, opacity, and transform. Reduced-motion disables transform and transition effects. No layout animation is introduced.
++
++## 7. Depth
++
++Borders and tonal stacking only. The Krea2 screen adds no drop shadows. `--bg`, `--surface`, `--krea-row`, and `--krea-input` provide the complete elevation ladder.
++
++## Do / Don't
++
++- Do keep filenames read-only and visually distinct from editable mapping fields.
++- Do make unmapped behavior explicit: no character LoRA is applied.
++- Do show the workflow source used to populate the list.
++- Don't use gradients, glow, glass effects, decorative status dots, or oversized cards.
++- Don't add a second accent color or a new icon family.
+diff --git a/DESIGN_TOKENS.md b/DESIGN_TOKENS.md
+new file mode 100644
+index 0000000..3863674
+--- /dev/null
++++ b/DESIGN_TOKENS.md
+@@ -0,0 +1,37 @@
++# Krea2 character LoRA UI tokens
++
++The Krea2 mapping screen extends the existing Hooking Manager visual language.
++It does not introduce a separate theme or decorative component system.
++
++## Color
++
++- Page: `--bg: #1a1a2e`
++- Primary surface: `--surface: #16213e`
++- Secondary surface: `--surface2: #0f3460`
++- Mapping row: `--krea-row: #111c36`
++- Input surface: `--krea-input: #0d1830`
++- Primary accent: `--accent: #e94560`
++- Success: `--success: #4caf50`
++- Warning/unmapped: `--warn: #ff9800`
++
++## Type and spacing
++
++- UI type: Segoe UI with Malgun Gothic fallback
++- Filename type: Consolas with D2Coding fallback
++- Control height: `--krea-control-height: 38px`
++- Content width: `--krea-content-width: 1200px`
++- Row gap: 12px desktop, stacked fields below 700px
++
++## Responsive layout
++
++- Above 980px: four columns (file, original strength, character, applied strength)
++- 701–980px: two columns
++- 700px and below: one column; header actions wrap; the global tab strip scrolls inside its own container
++
++## Interaction
++
++- Filenames and source strengths are read-only.
++- Character name and applied strength are editable.
++- Save is disabled until a value changes.
++- Focus rings use the existing accent with `--krea-focus`.
++- Reduced-motion preference disables button transitions.
+diff --git a/VISUAL_QA.md b/VISUAL_QA.md
+new file mode 100644
+index 0000000..11054f7
+--- /dev/null
++++ b/VISUAL_QA.md
+@@ -0,0 +1,19 @@
++# Krea2 character LoRA visual QA
++
++Validated in a real Chromium browser against `http://127.0.0.1:8189/` on 2026-07-11.
++
++## Results
++
++| Viewport | Layout | Horizontal document overflow | Rows | Result |
++| --- | --- | --- | ---: | --- |
++| 1280 × 800 | Four columns | No | 11 | Pass |
++| 768 × 900 | Two columns | No | 11 | Pass |
++| 390 × 844 | One column | No | 11 | Pass |
++
++The final browser pass reported zero console errors. The mobile header wraps within the viewport, while the existing global tab strip keeps its own horizontal scrolling region. All 11 character-name values were empty after QA; `Takahashi Kurumi` is placeholder text only.
++
++## Evidence
++
++- `.superloopy/evidence/frontend/20260711-krea2-lora/krea2-lora-1280.png`
++- `.superloopy/evidence/frontend/20260711-krea2-lora/krea2-lora-768.png`
++- `.superloopy/evidence/frontend/20260711-krea2-lora/krea2-lora-390.png`
+diff --git a/frontend/index.html b/frontend/index.html
+index 02bcd3d..a2ad09a 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -4,6 +4,7 @@
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>ComfyUI 에셋/삽화 매니저-V4</title>
++    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316213e'/%3E%3Cpath d='M4 4h8v8H4z' fill='none' stroke='%23e94560' stroke-width='2'/%3E%3C/svg%3E">
+     <style>
+         select option { background: var(--surface2); color: var(--text); }
+         :root {
+@@ -18,6 +19,11 @@
+             --success: #4caf50;
+             --warn: #ff9800;
+             --error: #f44336;
++            --krea-row: #111c36;
++            --krea-input: #0d1830;
++            --krea-focus: rgba(233, 69, 96, 0.22);
++            --krea-content-width: 1200px;
++            --krea-control-height: 38px;
+         }
+ 
+         * { margin: 0; padding: 0; box-sizing: border-box; }
+@@ -3252,6 +3258,142 @@
+             pointer-events: none;
+             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+         }
++        /* Krea2 character LoRA mapping */
++        .krea-lora-shell {
++            max-width: var(--krea-content-width);
++            margin: 0 auto;
++            display: flex;
++            flex-direction: column;
++            gap: 16px;
++        }
++        .krea-lora-head {
++            display: flex;
++            align-items: flex-start;
++            justify-content: space-between;
++            gap: 16px;
++            padding: 16px;
++            background: var(--surface);
++            border: 1px solid var(--border);
++            border-radius: 8px;
++        }
++        .krea-lora-head h2 { font-size: 1.15rem; line-height: 1.3; }
++        .krea-lora-head p { margin-top: 8px; color: var(--text2); font-size: 0.88rem; line-height: 1.5; }
++        .krea-lora-actions { display: flex; gap: 8px; flex-wrap: wrap; }
++        .krea-lora-actions button {
++            height: var(--krea-control-height);
++            padding: 0 16px;
++            border: 1px solid var(--border);
++            border-radius: 6px;
++            background: var(--surface2);
++            color: var(--text);
++            cursor: pointer;
++            transition: background 0.2s, opacity 0.2s, transform 0.2s;
++        }
++        .krea-lora-actions button:hover:not(:disabled) { background: var(--accent2); }
++        .krea-lora-actions button:active:not(:disabled) { transform: scale(0.98); }
++        .krea-lora-actions button:focus-visible,
++        .krea-lora-input:focus-visible {
++            outline: none;
++            border-color: var(--accent);
++            box-shadow: 0 0 0 3px var(--krea-focus);
++        }
++        .krea-lora-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
++        .krea-lora-actions .primary { background: var(--accent); border-color: var(--accent); }
++        .krea-lora-meta {
++            padding: 12px 16px;
++            background: var(--surface);
++            border: 1px solid var(--border);
++            border-radius: 8px;
++            color: var(--text2);
++            font-size: 0.72rem;
++            line-height: 1.4;
++            overflow-wrap: anywhere;
++        }
++        .krea-lora-meta code { color: var(--text); font-family: Consolas, D2Coding, monospace; }
++        .krea-lora-state {
++            padding: 16px;
++            border: 1px solid var(--border);
++            border-radius: 8px;
++            background: var(--surface);
++            color: var(--text2);
++            font-size: 0.88rem;
++        }
++        .krea-lora-state.error { color: var(--error); }
++        .krea-lora-list { display: flex; flex-direction: column; gap: 8px; }
++        .krea-lora-row {
++            display: grid;
++            grid-template-columns: minmax(260px, 1.6fr) 120px minmax(220px, 1fr) 180px;
++            align-items: end;
++            gap: 12px;
++            padding: 12px;
++            background: var(--krea-row);
++            border: 1px solid var(--border);
++            border-radius: 8px;
++        }
++        .krea-lora-field { min-width: 0; }
++        .krea-lora-label {
++            display: block;
++            margin-bottom: 4px;
++            color: var(--text2);
++            font-size: 0.76rem;
++            font-weight: 600;
++            line-height: 1.35;
++        }
++        .krea-lora-filename {
++            display: block;
++            overflow: hidden;
++            color: var(--text);
++            font-family: Consolas, D2Coding, monospace;
++            font-size: 0.78rem;
++            line-height: 1.4;
++            text-overflow: ellipsis;
++            white-space: nowrap;
++        }
++        .krea-lora-source {
++            margin-top: 4px;
++            color: var(--text2);
++            font-size: 0.72rem;
++            line-height: 1.4;
++        }
++        .krea-lora-input {
++            width: 100%;
++            height: var(--krea-control-height);
++            padding: 8px;
++            border: 1px solid var(--border);
++            border-radius: 6px;
++            background: var(--krea-input);
++            color: var(--text);
++            font: inherit;
++        }
++        .krea-lora-strength { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 8px; }
++        .krea-lora-strength input[type="range"] { accent-color: var(--accent); }
++        .krea-lora-badge {
++            display: inline-block;
++            margin-top: 6px;
++            padding: 2px 6px;
++            border: 1px solid currentColor;
++            border-radius: 4px;
++            color: var(--warn);
++            font-size: 0.72rem;
++        }
++        .krea-lora-badge.mapped { color: var(--success); }
++        @media (max-width: 980px) {
++            .krea-lora-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
++        }
++        @media (max-width: 700px) {
++            header { align-items: flex-start; }
++            header .controls { width: 100%; max-width: 100%; flex-wrap: wrap; }
++            .tab-bar { max-width: 100vw; padding: 0 12px; overflow-x: auto; }
++            .tab-btn { flex: 0 0 auto; padding-inline: 16px; }
++            .krea-lora-head { flex-direction: column; }
++            .krea-lora-actions { width: 100%; }
++            .krea-lora-actions button { flex: 1; }
++            .krea-lora-row { grid-template-columns: 1fr; align-items: stretch; }
++        }
++        @media (prefers-reduced-motion: reduce) {
++            .krea-lora-actions button { transition: none; }
++            .krea-lora-actions button:active:not(:disabled) { transform: none; }
++        }
+     </style>
+ </head>
+ <body>
+@@ -3296,6 +3438,7 @@
+         <span class="tab-divider"></span>
+         <button id="tab-btn-preset-mgmt" class="tab-btn" onclick="switchTab('preset-mgmt')">프리셋매니징</button>
+         <button id="tab-btn-lora" class="tab-btn" onclick="switchTab('lora')">로라매니징</button>
++        <button id="tab-btn-krea2-lora" class="tab-btn" onclick="switchTab('krea2-lora')">Krea2 캐릭터 LoRA</button>
+     </div>
+ 
+     <!-- 토스트 알림 -->
+@@ -5333,6 +5476,28 @@
+             </div><!-- /lora-instance-mode -->
+         </div>
+ 
++        <!-- Krea2 character LoRA tab -->
++        <div id="tab-krea2-lora-content" class="tab-content">
++            <section class="krea-lora-shell" aria-labelledby="krea2-lora-title">
++                <div class="krea-lora-head">
++                    <div>
++                        <h2 id="krea2-lora-title">Krea2 캐릭터 LoRA 연결</h2>
++                        <p>로어북 제목의 슬래시 앞 영문 이름을 입력하세요. 빈칸이거나 이름이 다르면 캐릭터 LoRA를 적용하지 않습니다.</p>
++                    </div>
++                    <div class="krea-lora-actions">
++                        <button type="button" onclick="loadKrea2LoraConfig()">목록 새로고침</button>
++                        <button type="button" class="primary" id="krea2-lora-save" onclick="saveKrea2LoraConfig()" disabled>변경 저장</button>
++                    </div>
++                </div>
++                <div class="krea-lora-meta">
++                    원본 워크플로우: <code id="krea2-lora-source">확인 중</code><br>
++                    매핑 파일: <code id="krea2-lora-mapping-path">확인 중</code>
++                </div>
++                <div id="krea2-lora-state" class="krea-lora-state" role="status" aria-live="polite">LoRA 목록을 불러오는 중입니다.</div>
++                <div id="krea2-lora-list" class="krea-lora-list"></div>
++            </section>
++        </div>
++
+         <!-- 프리셋매니징 탭 -->
+         <div id="tab-preset-mgmt-content" class="tab-content">
+             <div class="pm-container">
+@@ -15824,6 +15989,127 @@
+                 document.getElementById('tab-lora-content').classList.add('active');
+                 const savedMode = sessionStorage.getItem('loraMode') || 'asset';
+                 switchLoraMode(savedMode);
++            } else if (name === 'krea2-lora') {
++                document.querySelectorAll('.tab-btn')[9].classList.add('active');
++                document.getElementById('tab-krea2-lora-content').classList.add('active');
++                await loadKrea2LoraConfig();
++            }
++        }
++
++        let krea2LoraEntries = [];
++
++        function setKrea2LoraState(message, isError = false) {
++            const state = document.getElementById('krea2-lora-state');
++            state.textContent = message;
++            state.classList.toggle('error', isError);
++            state.style.display = '';
++        }
++
++        function markKrea2LoraDirty() {
++            document.getElementById('krea2-lora-save').disabled = false;
++        }
++
++        function renderKrea2LoraError(message) {
++            krea2LoraEntries = [];
++            document.getElementById('krea2-lora-list').innerHTML = '';
++            setKrea2LoraState(message, true);
++            document.getElementById('krea2-lora-save').disabled = true;
++        }
++
++        function syncKrea2Strength(index, value, source) {
++            const row = document.querySelector(`.krea-lora-row[data-index="${index}"]`);
++            if (!row) return;
++            const parsed = Math.min(2, Math.max(0, Number.parseFloat(value) || 0));
++            const range = row.querySelector('[data-field="strength"]');
++            const number = row.querySelector('[data-field="strength-number"]');
++            if (source !== 'range') range.value = parsed;
++            if (source !== 'number') number.value = parsed.toFixed(2);
++            markKrea2LoraDirty();
++        }
++
++        function renderKrea2LoraRows(entries) {
++            const list = document.getElementById('krea2-lora-list');
++            if (!entries.length) {
++                list.innerHTML = '';
++                setKrea2LoraState('렌더링할 Krea2 LoRA가 없습니다', true);
++                return;
++            }
++            document.getElementById('krea2-lora-state').style.display = 'none';
++            list.innerHTML = entries.map((entry, index) => {
++                const mapped = Boolean((entry.character_name || '').trim());
++                const sourceState = entry.source_enabled ? '원본 설정 ON' : '원본 설정 OFF';
++                return `<div class="krea-lora-row" data-index="${index}">
++                    <div class="krea-lora-field">
++                        <span class="krea-lora-label">LoRA 파일</span>
++                        <code class="krea-lora-filename" title="${escAttr(entry.filename)}">${escHtml(entry.filename)}</code>
++                        <div class="krea-lora-source">${sourceState}, 원본 강도 ${Number(entry.default_strength).toFixed(2)}</div>
++                        <span class="krea-lora-badge ${mapped ? 'mapped' : ''}">${mapped ? '캐릭터 연결됨' : '미등록: LoRA 미적용'}</span>
++                    </div>
++                    <div class="krea-lora-field">
++                        <span class="krea-lora-label">원본 강도</span>
++                        <input class="krea-lora-input" type="text" value="${Number(entry.default_strength).toFixed(2)}" readonly aria-label="원본 강도">
++                    </div>
++                    <label class="krea-lora-field">
++                        <span class="krea-lora-label">영문 캐릭터명</span>
++                        <input class="krea-lora-input" data-field="character_name" type="text" maxlength="120"
++                            value="${escAttr(entry.character_name || '')}" placeholder="Takahashi Kurumi"
++                            oninput="markKrea2LoraDirty()" autocomplete="off">
++                    </label>
++                    <div class="krea-lora-field">
++                        <span class="krea-lora-label">적용 강도</span>
++                        <div class="krea-lora-strength">
++                            <input data-field="strength" type="range" min="0" max="2" step="0.01" value="${Number(entry.strength).toFixed(2)}"
++                                oninput="syncKrea2Strength(${index}, this.value, 'range')" aria-label="적용 강도 슬라이더">
++                            <input class="krea-lora-input" data-field="strength-number" type="number" min="0" max="2" step="0.01"
++                                value="${Number(entry.strength).toFixed(2)}" oninput="syncKrea2Strength(${index}, this.value, 'number')" aria-label="적용 강도 숫자">
++                        </div>
++                    </div>
++                </div>`;
++            }).join('');
++        }
++
++        async function loadKrea2LoraConfig() {
++            setKrea2LoraState('LoRA 목록을 불러오는 중입니다.');
++            document.getElementById('krea2-lora-list').innerHTML = '';
++            document.getElementById('krea2-lora-save').disabled = true;
++            try {
++                const response = await fetch('/api/krea2_lora/config');
++                const data = await response.json();
++                if (!response.ok || !data.success) throw new Error(data.error || '목록을 불러오지 못했습니다.');
++                krea2LoraEntries = data.entries || [];
++                document.getElementById('krea2-lora-source').textContent = data.source_path || '설정되지 않음';
++                document.getElementById('krea2-lora-mapping-path').textContent = data.mapping_path || '설정되지 않음';
++                renderKrea2LoraRows(krea2LoraEntries);
++            } catch (error) {
++                renderKrea2LoraError(`Krea2 LoRA 목록 오류: ${error.message}`);
++            }
++        }
++
++        async function saveKrea2LoraConfig() {
++            const saveButton = document.getElementById('krea2-lora-save');
++            const entries = krea2LoraEntries.map((entry, index) => {
++                const row = document.querySelector(`.krea-lora-row[data-index="${index}"]`);
++                return {
++                    filename: entry.filename,
++                    character_name: row.querySelector('[data-field="character_name"]').value.trim(),
++                    strength: Number.parseFloat(row.querySelector('[data-field="strength-number"]').value),
++                };
++            });
++            saveButton.disabled = true;
++            try {
++                const response = await fetch('/api/krea2_lora/config', {
++                    method: 'POST',
++                    headers: { 'Content-Type': 'application/json' },
++                    body: JSON.stringify({ entries }),
++                });
++                const data = await response.json();
++                if (!response.ok || !data.success) throw new Error(data.error || '저장하지 못했습니다.');
++                krea2LoraEntries = data.entries || [];
++                renderKrea2LoraRows(krea2LoraEntries);
++                showToast('Krea2 캐릭터 LoRA 연결을 저장했습니다.', 'success');
++            } catch (error) {
++                renderKrea2LoraError(`Krea2 LoRA 저장 오류: ${error.message}`);
++                showToast(error.message, 'error');
+             }
+         }
+ 
+diff --git a/modes/krea2_character_lora.py b/modes/krea2_character_lora.py
+new file mode 100644
+index 0000000..ce1de65
+--- /dev/null
++++ b/modes/krea2_character_lora.py
+@@ -0,0 +1,311 @@
++"""Krea2 character LoRA catalog, persistence, and per-request routing."""
++
++from __future__ import annotations
++
++import copy
++import json
++import math
++import re
++import unicodedata
++from pathlib import Path
++from typing import TypedDict, cast
++
++
++DYNAMIC_LORA_NODE_TITLE = "Krea2 캐릭터 LoRA (동적)"
++CHARACTER_MARKER_PATTERN = re.compile(
++    r"^\s*\[\[KREA2_CHARACTER:([^\]\r\n]{1,120})\]\]\s*",
++    re.IGNORECASE,
++)
++
++
++class CatalogEntry(TypedDict):
++    """A character LoRA discovered in the source Power LoRA Loader."""
++
++    filename: str
++    default_strength: float
++    source_enabled: bool
++
++
++class MappingEntry(TypedDict):
++    """User-editable mapping persisted by Hooking Manager."""
++
++    filename: str
++    character_name: str
++    strength: float
++
++
++class DisplayEntry(MappingEntry):
++    """Merged catalog and mapping data returned to the frontend."""
++
++    default_strength: float
++    source_enabled: bool
++
++
++JsonObject = dict[str, object]
++
++
++def _as_object(value: object, label: str) -> JsonObject:
++    """Return a JSON object or fail with a descriptive label."""
++
++    if not isinstance(value, dict):
++        raise ValueError(f"{label} must be an object")
++    return cast(JsonObject, value)
++
++
++def _as_list(value: object, label: str) -> list[object]:
++    """Return a JSON list or fail with a descriptive label."""
++
++    if not isinstance(value, list):
++        raise ValueError(f"{label} must be a list")
++    return cast(list[object], value)
++
++
++def _is_number(value: object) -> bool:
++    """Return whether a JSON value is a non-boolean number."""
++
++    return isinstance(value, (int, float)) and not isinstance(value, bool)
++
++
++def load_power_lora_catalog(workflow_path: Path) -> list[CatalogEntry]:
++    """Read Krea2 LoRA filenames and defaults from Power LoRA Loader nodes."""
++
++    workflow = _as_object(
++        json.loads(workflow_path.read_text(encoding="utf-8")), "workflow"
++    )
++    nodes = _as_list(workflow.get("nodes", []), "workflow nodes")
++    entries: list[CatalogEntry] = []
++    seen: set[str] = set()
++
++    for raw_node in nodes:
++        node = _as_object(raw_node, "workflow node")
++        if node.get("type") != "Power Lora Loader (rgthree)":
++            continue
++        for raw_widget in _as_list(node.get("widgets_values", []), "widgets values"):
++            if not isinstance(raw_widget, dict):
++                continue
++            widget = cast(JsonObject, raw_widget)
++            filename = widget.get("lora")
++            strength = widget.get("strength")
++            if not isinstance(filename, str) or not _is_number(strength):
++                continue
++            normalized_path = filename.replace("/", "\\")
++            if not normalized_path.casefold().startswith("krea2\\"):
++                continue
++            key = normalized_path.casefold()
++            if key in seen:
++                continue
++            seen.add(key)
++            entries.append(
++                {
++                    "filename": normalized_path,
++                    "default_strength": float(cast(int | float, strength)),
++                    "source_enabled": bool(widget.get("on", False)),
++                }
++            )
++
++    if not entries:
++        raise ValueError(
++            f"No Krea2 character LoRAs were found in {workflow_path}"
++        )
++    return entries
++
++
++def normalize_character_name(value: str) -> str:
++    """Normalize a character name for exact, case-insensitive matching."""
++
++    normalized = unicodedata.normalize("NFKC", value)
++    return " ".join(normalized.split()).casefold()
++
++
++def validate_mapping_entries(
++    catalog: list[CatalogEntry], incoming: list[object]
++) -> list[MappingEntry]:
++    """Validate editable mappings against the immutable workflow catalog."""
++
++    valid_files = {entry["filename"].casefold(): entry["filename"] for entry in catalog}
++    used_files: set[str] = set()
++    used_names: set[str] = set()
++    validated: list[MappingEntry] = []
++
++    for index, raw_entry in enumerate(incoming):
++        entry = _as_object(raw_entry, f"mapping {index}")
++        raw_filename = entry.get("filename")
++        raw_name = entry.get("character_name", "")
++        raw_strength = entry.get("strength")
++        if not isinstance(raw_filename, str) or raw_filename.casefold() not in valid_files:
++            raise ValueError(f"Mapping {index} references an unknown LoRA file")
++        file_key = raw_filename.casefold()
++        if file_key in used_files:
++            raise ValueError(f"Mapping {index} repeats a LoRA file")
++        used_files.add(file_key)
++
++        if not isinstance(raw_name, str):
++            raise ValueError(f"Mapping {index} has an invalid character name")
++        character_name = " ".join(raw_name.split())
++        if len(character_name) > 120 or any(
++            character in character_name for character in "[]\r\n"
++        ):
++            raise ValueError(f"Mapping {index} has an invalid character name")
++        normalized_name = normalize_character_name(character_name)
++        if normalized_name:
++            if normalized_name in used_names:
++                raise ValueError("Each character name can be assigned to only one LoRA")
++            used_names.add(normalized_name)
++
++        if not _is_number(raw_strength):
++            raise ValueError(f"Mapping {index} has an invalid strength")
++        strength = float(cast(int | float, raw_strength))
++        if not math.isfinite(strength) or strength < 0 or strength > 2:
++            raise ValueError(f"Mapping {index} strength must be between 0 and 2")
++
++        validated.append(
++            {
++                "filename": valid_files[file_key],
++                "character_name": character_name,
++                "strength": strength,
++            }
++        )
++    return validated
++
++
++def merge_catalog_with_mappings(
++    catalog: list[CatalogEntry], saved: list[MappingEntry]
++) -> list[DisplayEntry]:
++    """Merge immutable catalog metadata with user mapping overrides."""
++
++    saved_by_file = {entry["filename"].casefold(): entry for entry in saved}
++    merged: list[DisplayEntry] = []
++    for catalog_entry in catalog:
++        saved_entry = saved_by_file.get(catalog_entry["filename"].casefold())
++        merged.append(
++            {
++                "filename": catalog_entry["filename"],
++                "character_name": (
++                    saved_entry["character_name"] if saved_entry else ""
++                ),
++                "strength": (
++                    saved_entry["strength"]
++                    if saved_entry
++                    else catalog_entry["default_strength"]
++                ),
++                "default_strength": catalog_entry["default_strength"],
++                "source_enabled": catalog_entry["source_enabled"],
++            }
++        )
++    return merged
++
++
++def load_mapping_file(mapping_path: Path) -> list[MappingEntry]:
++    """Load persisted mappings, returning an empty list before first save."""
++
++    if not mapping_path.is_file():
++        return []
++    payload = _as_object(
++        json.loads(mapping_path.read_text(encoding="utf-8")), "mapping file"
++    )
++    entries = _as_list(payload.get("entries", []), "mapping entries")
++    result: list[MappingEntry] = []
++    for index, raw_entry in enumerate(entries):
++        entry = _as_object(raw_entry, f"saved mapping {index}")
++        filename = entry.get("filename")
++        character_name = entry.get("character_name")
++        strength = entry.get("strength")
++        if (
++            not isinstance(filename, str)
++            or not isinstance(character_name, str)
++            or not _is_number(strength)
++        ):
++            raise ValueError(f"Saved mapping {index} is invalid")
++        result.append(
++            {
++                "filename": filename,
++                "character_name": character_name,
++                "strength": float(cast(int | float, strength)),
++            }
++        )
++    return result
++
++
++def save_mapping_file(mapping_path: Path, entries: list[MappingEntry]) -> None:
++    """Atomically persist validated character mappings."""
++
++    mapping_path.parent.mkdir(parents=True, exist_ok=True)
++    temporary = mapping_path.with_suffix(mapping_path.suffix + ".tmp")
++    temporary.write_text(
++        json.dumps({"version": 1, "entries": entries}, ensure_ascii=False, indent=2)
++        + "\n",
++        encoding="utf-8",
++    )
++    temporary.replace(mapping_path)
++
++
++def extract_character_marker(prompt: str) -> tuple[str, str | None]:
++    """Remove a leading module routing marker and return its character name."""
++
++    match = CHARACTER_MARKER_PATTERN.match(prompt)
++    if match is None:
++        return prompt, None
++    character_name = " ".join(match.group(1).split())
++    return prompt[match.end() :].strip(), character_name or None
++
++
++def find_character_mapping(
++    character_name: str | None, mappings: list[MappingEntry]
++) -> MappingEntry | None:
++    """Find an exact normalized character mapping, or return no LoRA."""
++
++    if not character_name:
++        return None
++    expected = normalize_character_name(character_name)
++    if not expected:
++        return None
++    for mapping in mappings:
++        if normalize_character_name(mapping["character_name"]) == expected:
++            return mapping
++    return None
++
++
++def route_character_lora(
++    workflow: JsonObject, mapping: MappingEntry | None
++) -> JsonObject:
++    """Apply exactly one mapped LoRA, or remove and bypass the dynamic node."""
++
++    routed = cast(JsonObject, copy.deepcopy(workflow))
++    dynamic_id: str | None = None
++    dynamic_node: JsonObject | None = None
++    for node_id, raw_node in routed.items():
++        if not isinstance(raw_node, dict):
++            continue
++        node = cast(JsonObject, raw_node)
++        meta = node.get("_meta")
++        if isinstance(meta, dict) and meta.get("title") == DYNAMIC_LORA_NODE_TITLE:
++            dynamic_id = str(node_id)
++            dynamic_node = node
++            break
++
++    if dynamic_id is None or dynamic_node is None:
++        return routed
++    inputs = _as_object(dynamic_node.get("inputs", {}), "dynamic LoRA inputs")
++    if mapping is not None:
++        inputs["lora_name"] = mapping["filename"]
++        inputs["strength_model"] = mapping["strength"]
++        return routed
++
++    upstream = inputs.get("model")
++    if not isinstance(upstream, list) or len(upstream) != 2:
++        raise ValueError("Dynamic LoRA node has no valid model input")
++    for raw_node in routed.values():
++        if not isinstance(raw_node, dict):
++            continue
++        node_inputs = raw_node.get("inputs")
++        if not isinstance(node_inputs, dict):
++            continue
++        for input_name, input_value in list(node_inputs.items()):
++            if (
++                isinstance(input_value, list)
++                and len(input_value) == 2
++                and str(input_value[0]) == dynamic_id
++            ):
++                node_inputs[input_name] = copy.deepcopy(upstream)
++    del routed[dynamic_id]
++    return routed
+diff --git a/server.py b/server.py
+index 4990ce6..ee028ff 100644
+--- a/server.py
++++ b/server.py
+@@ -14,6 +14,7 @@ import traceback
+ import base64
+ import shutil
+ import mimetypes
++from pathlib import Path
+ 
+ # webp mimetype 등록 (Windows 기본 누락 대응)
+ mimetypes.add_type('image/webp', '.webp')
+@@ -46,6 +47,16 @@ from modes.bot_mode import data_patcher
+ from modes.bot_mode import handle_get_illust_settings, handle_update_illust_settings, handle_auto_group_prompt, handle_get_positive_rules, handle_save_positive_rules
+ from modes import embedding_service
+ from modes.illust_prompt_builder import IllustPromptBuilder, log_illust_build, get_illust_logs
++from modes.krea2_character_lora import (
++    extract_character_marker,
++    find_character_mapping,
++    load_mapping_file,
++    load_power_lora_catalog,
++    merge_catalog_with_mappings,
++    route_character_lora,
++    save_mapping_file,
++    validate_mapping_entries,
++)
+ import importlib.util
+ 
+ # ─── 설정 ───────────────────────────────────────────────
+@@ -60,6 +71,7 @@ WORKFLOW_BACKUP_DIR = os.path.join(BASE_DIR, "workflow_backup")
+ LOG_DIR = os.path.join(BASE_DIR, "logs")
+ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
++KREA2_LORA_MAPPING_FILE = os.path.join(BASE_DIR, "krea2_character_lora_map.json")
+ MODE_WORKFLOW_DIR = os.path.join(BASE_DIR, "mode_workflow")
+ CURRENT_MODE_WORK_DIR = os.path.join(BASE_DIR, "current_mode_workflow")
+ WORKFLOW_BACKUP_STATIC_DIR = os.path.join(BASE_DIR, "workflow_backup_static")
+@@ -69,6 +81,7 @@ DEFAULT_CONFIG = {
+     "comfyui_port": 8188,  # ComfyUI 서버 포트
+     "comfyui_port_illustration": None,  # 삽화 전용 포트 (null=메인 포트 사용)
+     "comfy_workflow_source_path": "",
++    "krea2_lora_catalog_source_path": "",
+     "data_saving_mode": False,
+     "send_original": False,  # 전송 시 원본 무변환 전송
+     "webp_quality": 85,
+@@ -579,7 +592,18 @@ def split_prompt_chat(text: str) -> tuple[str, str]:
+     return text, ""
+ 
+ 
+-def build_prompt(positive: str, negative: str) -> dict:
++def _resolve_krea2_character_mapping(character_name: str | None) -> dict | None:
++    """Resolve one exact character mapping, failing closed to no LoRA."""
++
++    try:
++        mappings = load_mapping_file(Path(KREA2_LORA_MAPPING_FILE))
++        return find_character_mapping(character_name, mappings)
++    except Exception as error:
++        log_to_file("proxy.log", f"Krea2 LoRA 매핑 로드 실패, 미적용: {error}")
++        return None
++
++
++def build_prompt(positive: str, negative: str, character_name: str | None = None) -> dict:
+     """현재 API 워크플로우에 긍정/부정 프롬프트를 주입한다."""
+     if current_api_workflow is None:
+         raise RuntimeError("API 워크플로우가 로드되지 않았습니다")
+@@ -594,7 +618,16 @@ def build_prompt(positive: str, negative: str) -> dict:
+         elif title == "부정프롬프트":
+             ninfo["inputs"]["value"] = negative
+             log_to_file("proxy.log", f"부정프롬프트 주입 (node {nid}): {negative[:100]}...")
+-    return wf
++    mapping = _resolve_krea2_character_mapping(character_name)
++    routed = route_character_lora(wf, mapping)
++    if mapping is not None:
++        log_to_file(
++            "proxy.log",
++            f"Krea2 캐릭터 LoRA 적용: {character_name} -> {mapping['filename']} @ {mapping['strength']}",
++        )
++    elif character_name:
++        log_to_file("proxy.log", f"Krea2 캐릭터 LoRA 미등록, 미적용: {character_name}")
++    return routed
+ 
+ 
+ # ─── 이미지 처리 (클라이언트 전송용) ─────────────────────
+@@ -978,7 +1011,12 @@ async def fetch_real_image(
+ 
+ 
+ # ─── 이미지 생성 공통 로직 ────────────────────────────────
+-async def generate_image_with_prompt(positive: str, negative: str, progress_callback=None):
++async def generate_image_with_prompt(
++    positive: str,
++    negative: str,
++    progress_callback=None,
++    character_name: str | None = None,
++):
+     """현재 워크플로우에 프롬프트를 주입하고 삽화 포트에서 이미지를 생성한다.
+     삽화 포트가 설정되어 있으면 해당 포트를, 아니면 메인 포트를 사용한다.
+     반환: (image_bytes, node_errors_or_error_msg)
+@@ -987,7 +1025,7 @@ async def generate_image_with_prompt(positive: str, negative: str, progress_call
+     if current_api_workflow is None:
+         return None, "API 워크플로우 없음"
+ 
+-    risu_prompt = build_prompt(positive, negative)
++    risu_prompt = build_prompt(positive, negative, character_name)
+     illust_port = get_illust_port()
+ 
+     # 디버깅 모드: ComfyUI 전송 없이 프롬프트 로그만 출력
+@@ -1564,6 +1602,7 @@ async def process_prompt(prompt_id: str, incoming_prompt: dict, raw_body: dict,
+         # 프롬프트 추출
+         positive = extract_prompts_by_title(incoming_prompt, "긍정프롬프트") or ""
+         negative = extract_prompts_by_title(incoming_prompt, "부정프롬프트") or ""
++        positive, krea2_character_name = extract_character_marker(positive)
+ 
+         # 가중치 클램프 적용
+         if app_config.get("clamp_enabled", False):
+@@ -1682,7 +1721,12 @@ async def process_prompt(prompt_id: str, incoming_prompt: dict, raw_body: dict,
+ 
+         # 이미지 생성
+         start_time = time.time()
+-        img_bytes, node_errors = await generate_image_with_prompt(positive, negative, progress_callback=queue_progress_callback)
++        img_bytes, node_errors = await generate_image_with_prompt(
++            positive,
++            negative,
++            progress_callback=queue_progress_callback,
++            character_name=krea2_character_name,
++        )
+         elapsed_time = time.time() - start_time
+ 
+         if img_bytes is None:
+@@ -3431,6 +3475,65 @@ async def handle_api_workflow_files(request: web.Request) -> web.Response:
+         return web.json_response({"error": str(e)}, status=500)
+ 
+ 
++def _get_krea2_catalog_source_path() -> Path:
++    """Return the configured read-only source workflow for LoRA discovery."""
++
++    configured = str(app_config.get("krea2_lora_catalog_source_path", "")).strip()
++    if not configured:
++        raise ValueError("Krea2 LoRA 카탈로그 원본 워크플로우 경로가 설정되지 않았습니다.")
++    source = Path(configured)
++    if not source.is_file():
++        raise FileNotFoundError(f"Krea2 LoRA 원본 워크플로우를 찾을 수 없습니다: {source}")
++    return source
++
++
++def _build_krea2_lora_response() -> dict[str, object]:
++    """Build frontend data from the workflow catalog and persisted overrides."""
++
++    source = _get_krea2_catalog_source_path()
++    catalog = load_power_lora_catalog(source)
++    saved = load_mapping_file(Path(KREA2_LORA_MAPPING_FILE))
++    validated_saved = validate_mapping_entries(catalog, list(saved)) if saved else []
++    entries = merge_catalog_with_mappings(catalog, validated_saved)
++    return {
++        "success": True,
++        "source_path": str(source),
++        "mapping_path": KREA2_LORA_MAPPING_FILE,
++        "entries": entries,
++        "mapped_count": sum(1 for entry in entries if entry["character_name"]),
++    }
++
++
++async def handle_api_krea2_lora_config(request: web.Request) -> web.Response:
++    """Read or update immutable-filename Krea2 character LoRA mappings."""
++
++    try:
++        if request.method == "GET":
++            return web.json_response(_build_krea2_lora_response())
++
++        body = await request.json()
++        incoming = body.get("entries", []) if isinstance(body, dict) else []
++        if not isinstance(incoming, list):
++            return web.json_response(
++                {"success": False, "error": "entries는 목록이어야 합니다."},
++                status=400,
++            )
++        catalog = load_power_lora_catalog(_get_krea2_catalog_source_path())
++        validated = validate_mapping_entries(catalog, incoming)
++        save_mapping_file(Path(KREA2_LORA_MAPPING_FILE), validated)
++        return web.json_response(_build_krea2_lora_response())
++    except (ValueError, FileNotFoundError, json.JSONDecodeError) as error:
++        return web.json_response(
++            {"success": False, "error": str(error)}, status=400
++        )
++    except Exception as error:
++        print(f"[KREA2_LORA] 설정 처리 실패: {error}")
++        traceback.print_exc()
++        return web.json_response(
++            {"success": False, "error": str(error)}, status=500
++        )
++
++
+ # ─── 미들웨어 ────────────────────────────────────────────
+ @web.middleware
+ async def log_middleware(request, handler):
+@@ -3508,6 +3611,8 @@ app.router.add_post("/api/restore_manual_draw", handle_api_restore_manual_draw)
+ app.router.add_get("/api/frontend_ws", handle_frontend_ws)
+ app.router.add_get("/api/config", handle_api_config)
+ app.router.add_post("/api/config", handle_api_config)
++app.router.add_get("/api/krea2_lora/config", handle_api_krea2_lora_config)
++app.router.add_post("/api/krea2_lora/config", handle_api_krea2_lora_config)
+ app.router.add_post("/api/patch-comfy-input", handle_api_patch_comfy_input)
+ app.router.add_get("/api/workflow_files", handle_api_workflow_files)
+ # 워크플로우 능력 테스트 API
+diff --git a/tests/test_krea2_character_lora.py b/tests/test_krea2_character_lora.py
+new file mode 100644
+index 0000000..b7e5223
+--- /dev/null
++++ b/tests/test_krea2_character_lora.py
+@@ -0,0 +1,247 @@
++"""Tests for Krea2 character-specific LoRA routing."""
++
++from __future__ import annotations
++
++import importlib.util
++import json
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from types import ModuleType
++
++
++ROOT = Path(__file__).resolve().parents[1]
++MODULE_PATH = ROOT / "modes" / "krea2_character_lora.py"
++
++
++def load_module() -> ModuleType:
++    """Load the pure routing module without importing the full modes package."""
++
++    spec = importlib.util.spec_from_file_location("krea2_character_lora", MODULE_PATH)
++    if spec is None or spec.loader is None:
++        raise RuntimeError(f"Unable to load {MODULE_PATH}")
++    module = importlib.util.module_from_spec(spec)
++    sys.modules[spec.name] = module
++    spec.loader.exec_module(module)
++    return module
++
++
++def sample_catalog_workflow() -> dict[str, object]:
++    """Return a minimal UI workflow containing the original Power LoRA list."""
++
++    return {
++        "nodes": [
++            {
++                "id": 264,
++                "type": "Power Lora Loader (rgthree)",
++                "widgets_values": [
++                    {},
++                    {"type": "PowerLoraLoaderHeaderWidget"},
++                    {
++                        "on": False,
++                        "lora": r"krea2\H2H_Jiwoo_v1.safetensors",
++                        "strength": 0.96,
++                        "strengthTwo": None,
++                    },
++                    {
++                        "on": True,
++                        "lora": r"krea2\Bohee_v1.safetensors",
++                        "strength": 0.8,
++                        "strengthTwo": None,
++                    },
++                    {},
++                    "",
++                ],
++            }
++        ]
++    }
++
++
++def sample_api_workflow() -> dict[str, object]:
++    """Return a minimal API workflow with a dynamic character LoRA node."""
++
++    return {
++        "206": {
++            "inputs": {
++                "model": ["205", 0],
++                "lora_name": r"krea2\fedor_bypass.safetensors",
++                "strength_model": 3.0,
++            },
++            "class_type": "LoraLoaderModelOnly",
++            "_meta": {"title": "fedor_bypass"},
++        },
++        "297": {
++            "inputs": {
++                "model": ["206", 0],
++                "lora_name": r"krea2\H2H_Jiwoo_v1.safetensors",
++                "strength_model": 0.0,
++            },
++            "class_type": "LoraLoaderModelOnly",
++            "_meta": {"title": "Krea2 캐릭터 LoRA (동적)"},
++        },
++        "204": {
++            "inputs": {"model": ["297", 0]},
++            "class_type": "PatchFlashAttentionKJ",
++            "_meta": {"title": "FlashAttention"},
++        },
++    }
++
++
++class CatalogTests(unittest.TestCase):
++    """Verify workflow catalog import and mapping persistence."""
++
++    def test_reads_filenames_strengths_and_enabled_state_from_power_loader(self) -> None:
++        module = load_module()
++        with tempfile.TemporaryDirectory() as temp_dir:
++            workflow_path = Path(temp_dir) / "workflow.json"
++            workflow_path.write_text(
++                json.dumps(sample_catalog_workflow()), encoding="utf-8"
++            )
++            catalog = module.load_power_lora_catalog(workflow_path)
++
++        self.assertEqual(
++            catalog,
++            [
++                {
++                    "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                    "default_strength": 0.96,
++                    "source_enabled": False,
++                },
++                {
++                    "filename": r"krea2\Bohee_v1.safetensors",
++                    "default_strength": 0.8,
++                    "source_enabled": True,
++                },
++            ],
++        )
++
++    def test_saved_strength_and_character_name_override_catalog_defaults(self) -> None:
++        module = load_module()
++        catalog = [
++            {
++                "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                "default_strength": 0.96,
++                "source_enabled": False,
++            }
++        ]
++        saved = [
++            {
++                "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                "character_name": "Takahashi Kurumi",
++                "strength": 0.72,
++            }
++        ]
++
++        merged = module.merge_catalog_with_mappings(catalog, saved)
++
++        self.assertEqual(merged[0]["character_name"], "Takahashi Kurumi")
++        self.assertEqual(merged[0]["strength"], 0.72)
++        self.assertEqual(merged[0]["default_strength"], 0.96)
++
++    def test_rejects_unknown_files_duplicate_names_and_invalid_strengths(self) -> None:
++        module = load_module()
++        catalog = [
++            {
++                "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                "default_strength": 0.96,
++                "source_enabled": False,
++            },
++            {
++                "filename": r"krea2\Bohee_v1.safetensors",
++                "default_strength": 0.8,
++                "source_enabled": True,
++            },
++        ]
++        with self.assertRaises(ValueError):
++            module.validate_mapping_entries(
++                catalog,
++                [{"filename": "missing.safetensors", "character_name": "A", "strength": 1}],
++            )
++        with self.assertRaises(ValueError):
++            module.validate_mapping_entries(
++                catalog,
++                [
++                    {
++                        "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                        "character_name": "Takahashi Kurumi",
++                        "strength": 0.8,
++                    },
++                    {
++                        "filename": r"krea2\Bohee_v1.safetensors",
++                        "character_name": " takahashi   kurumi ",
++                        "strength": 0.7,
++                    },
++                ],
++            )
++        with self.assertRaises(ValueError):
++            module.validate_mapping_entries(
++                catalog,
++                [
++                    {
++                        "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                        "character_name": "Takahashi Kurumi",
++                        "strength": 2.1,
++                    }
++                ],
++            )
++
++
++class RoutingTests(unittest.TestCase):
++    """Verify exact-name marker extraction and single-LoRA graph routing."""
++
++    def test_extracts_and_removes_only_the_leading_character_marker(self) -> None:
++        module = load_module()
++        prompt = "[[KREA2_CHARACTER:Takahashi Kurumi]]\n\nA detailed portrait."
++
++        cleaned, character_name = module.extract_character_marker(prompt)
++
++        self.assertEqual(character_name, "Takahashi Kurumi")
++        self.assertEqual(cleaned, "A detailed portrait.")
++
++    def test_exact_normalized_english_name_matches_and_blank_or_other_name_does_not(self) -> None:
++        module = load_module()
++        mappings = [
++            {
++                "filename": r"krea2\H2H_Jiwoo_v1.safetensors",
++                "character_name": "Takahashi Kurumi",
++                "strength": 0.72,
++            }
++        ]
++
++        self.assertEqual(
++            module.find_character_mapping(" takahashi   KURUMI ", mappings),
++            mappings[0],
++        )
++        self.assertIsNone(module.find_character_mapping("타카하시 쿠루미", mappings))
++        self.assertIsNone(module.find_character_mapping("", mappings))
++        self.assertIsNone(module.find_character_mapping("Roh Hae-il", mappings))
++
++    def test_selected_mapping_keeps_one_loader_and_sets_file_and_strength(self) -> None:
++        module = load_module()
++        mapping = {
++            "filename": r"krea2\Bohee_v1.safetensors",
++            "character_name": "Takahashi Kurumi",
++            "strength": 0.73,
++        }
++
++        routed = module.route_character_lora(sample_api_workflow(), mapping)
++
++        self.assertEqual(
++            routed["297"]["inputs"]["lora_name"],
++            r"krea2\Bohee_v1.safetensors",
++        )
++        self.assertEqual(routed["297"]["inputs"]["strength_model"], 0.73)
++        self.assertEqual(routed["204"]["inputs"]["model"], ["297", 0])
++
++    def test_unmapped_character_removes_loader_and_bypasses_to_fedor(self) -> None:
++        module = load_module()
++
++        routed = module.route_character_lora(sample_api_workflow(), None)
++
++        self.assertNotIn("297", routed)
++        self.assertEqual(routed["204"]["inputs"]["model"], ["206", 0])
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_krea2_lora_frontend_contract.py b/tests/test_krea2_lora_frontend_contract.py
+new file mode 100644
+index 0000000..24d25cc
+--- /dev/null
++++ b/tests/test_krea2_lora_frontend_contract.py
+@@ -0,0 +1,43 @@
++"""Static contract tests for the Krea2 LoRA mapping screen."""
++
++from __future__ import annotations
++
++import unittest
++from pathlib import Path
++
++
++FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
++
++
++class Krea2LoraFrontendTests(unittest.TestCase):
++    """Keep the dedicated menu and its safety affordances intact."""
++
++    def test_has_dedicated_tab_loading_error_and_empty_states(self) -> None:
++        html = FRONTEND.read_text(encoding="utf-8")
++
++        self.assertIn('id="tab-btn-krea2-lora"', html)
++        self.assertIn('id="tab-krea2-lora-content"', html)
++        self.assertIn('id="krea2-lora-state"', html)
++        self.assertIn("loadKrea2LoraConfig", html)
++        self.assertIn("renderKrea2LoraError", html)
++        self.assertIn("렌더링할 Krea2 LoRA가 없습니다", html)
++
++    def test_filename_is_rendered_as_code_and_only_name_and_strength_are_editable(self) -> None:
++        html = FRONTEND.read_text(encoding="utf-8")
++
++        self.assertIn('class="krea-lora-filename"', html)
++        self.assertIn('data-field="character_name"', html)
++        self.assertIn('data-field="strength"', html)
++        self.assertNotIn('data-field="filename"', html)
++        self.assertIn("saveKrea2LoraConfig", html)
++
++    def test_mapping_rows_collapse_without_horizontal_scroll_on_mobile(self) -> None:
++        html = FRONTEND.read_text(encoding="utf-8")
++
++        self.assertIn("@media (max-width: 700px)", html)
++        self.assertIn(".krea-lora-row", html)
++        self.assertIn("grid-template-columns: 1fr", html)
++
++
++if __name__ == "__main__":
++    unittest.main()

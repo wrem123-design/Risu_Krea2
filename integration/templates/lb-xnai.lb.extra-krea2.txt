@@ -1,0 +1,25 @@
+## Krea2 Character Identity Profiles
+
+Use this lorebook only for physical identity that must remain stable between images.
+The illustration planner copies each matching profile into the `appearance` field.
+Do not put scene, pose, camera, lighting, background, or temporary clothing here.
+
+### Character: CHARACTER_NAME
+
+Canonical name: CHARACTER_NAME
+
+Fixed appearance: Write one complete English paragraph describing the character's
+age category, skin, face shape, eyes, eyebrows, nose, lips, hair color and style,
+body shape, and any permanent identifying features. Avoid prompt weights, tags,
+LoRA names, camera language, and negative prompts.
+
+Continuity notes: List only permanent details that the planner must never change.
+
+### Character: SECOND_CHARACTER_NAME
+
+Canonical name: SECOND_CHARACTER_NAME
+
+Fixed appearance: Replace this paragraph with the second character's immutable
+English appearance profile, or remove this entire example section.
+
+Continuity notes: Permanent details only.
