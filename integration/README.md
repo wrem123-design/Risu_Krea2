@@ -18,7 +18,7 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.3.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -34,16 +34,16 @@ is assembled into five English natural-language paragraphs: appearance, outfit,
 background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words, and the module rejects missing
 or underspecified paragraphs before requesting an image.
-Version 4.3 sends the descriptor's canonical English character name as an
+Version 4.4 sends the descriptor's canonical English character name as an
 internal routing marker. Hooking Manager removes that marker before CLIP
 encoding and applies at most one exactly matched character LoRA. Empty or
 unmatched names bypass the dynamic LoRA node completely.
-Only `프리셋 1` is included, and its complete content is
-`[Positive]` followed by `{prompt}`. The Lua parser accepts this positive-only
-preset without requiring a `[Negative]` section.
-The fifth paragraph must explicitly request photorealistic real-world photography.
-Validation rejects missing photorealism, and the generator adds a fixed photographic
-fallback if an unvalidated descriptor reaches generation.
+Only `프리셋 1` is included. It assembles `{appearance}`, `{outfit}`, `{background}`,
+`{composition}`, and `{details}` as five paragraphs. Its fifth paragraph prefixes
+`{details}` with the fixed smartphone and photorealistic style. Module generation
+rules keep `{details}` style-neutral, so another preset can later replace only the
+style prefix to produce 2D or another rendering medium. The preset remains
+positive-only and does not require a `[Negative]` section.
 
 ## Workflow contract
 

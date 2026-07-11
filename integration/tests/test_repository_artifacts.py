@@ -23,15 +23,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.3 module artifact."""
+    """Return the single published Krea2 4.4 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.3" in path.name
+        if "Krea2 4.4" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.3 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4 module, found {matches}")
     return matches[0]
 
 
@@ -57,21 +57,26 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_43_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_44_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.3")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
         }
-        self.assertEqual(entries["프리셋 1"].strip(), "[Positive]\n{prompt}")
+        self.assertEqual(
+            entries["프리셋 1"].strip(),
+            "[Positive]\n{appearance}\n\n{outfit}\n\n{background}\n\n{composition}\n\n"
+            "shot on smartphone, photorealistic real-world photography, realistic skin texture, "
+            "natural optical depth of field, {details}",
+        )
         self.assertIn("[[KREA2_CHARACTER:", entries["lb-xnai.gen"])
-        self.assertIn("ensurePhotorealistic", entries["lb-xnai.gen"])
-        self.assertIn("photorealistic", entries["lb-xnai.lb.onValidate"].lower())
+        self.assertNotIn("ensurePhotorealistic", entries["lb-xnai.gen"])
+        self.assertNotIn("details must explicitly include photorealistic", entries["lb-xnai.lb.onValidate"].lower())
         self.assertIn("negative = ''", entries["lb-xnai.gen"])
         for field in ("appearance:", "outfit:", "background:", "composition:", "details:"):
             self.assertIn(field, entries["lb-xnai.lb.format"])
