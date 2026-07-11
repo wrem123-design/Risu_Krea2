@@ -9,6 +9,8 @@
 - 모듈의 `[[KREA2_CHARACTER:...]]` 표식 제거
 - 영문 이름 정확 일치 시 LoRA 하나만 적용
 - 빈칸 또는 불일치 시 동적 LoRA 노드 삭제 및 fedor 경로 우회
+- 원본 워크플로 해상도 표시와 가로·세로 오버라이드 저장
+- 다음 생성 요청의 `Image Width`·`Image Height` 노드에 저장값 적용
 
 ## 적용
 
@@ -26,7 +28,7 @@ git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0001-krea2-character-lor
 }
 ```
 
-`config.json`과 `krea2_character_lora_map.json`은 컴퓨터별 로컬 상태이므로 이 저장소에 커밋하지 않습니다.
+`config.json`과 `krea2_character_lora_map.json`은 컴퓨터별 로컬 상태이므로 이 저장소에 커밋하지 않습니다. 매핑 파일은 캐릭터 연결과 함께 해상도 오버라이드도 보관합니다.
 
 ## 검증
 

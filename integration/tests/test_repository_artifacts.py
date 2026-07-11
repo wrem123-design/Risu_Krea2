@@ -105,6 +105,10 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("normalize_character_name", patch)
         self.assertIn("validate_mapping_entries", patch)
         self.assertIn("route_character_lora", patch)
+        self.assertIn("apply_resolution", patch)
+        self.assertIn("load_workflow_resolution", patch)
+        self.assertIn('id="krea2-resolution-width"', patch)
+        self.assertIn('id="krea2-resolution-height"', patch)
 
 
 if __name__ == "__main__":
