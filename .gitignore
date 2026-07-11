@@ -1,0 +1,36 @@
+# Local runtimes and model data
+ComfyUI/
+comfypack/
+python_embeded/
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+
+# Local state and secrets
+config.json
+krea2_character_lora_map.json
+*.key
+*.env
+key/
+
+# Generated media and logs
+output/
+input/
+temp/
+logs/
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Python and editor state
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+
+# Superloopy evidence stays local
+.superloopy/
