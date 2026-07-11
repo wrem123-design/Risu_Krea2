@@ -21,9 +21,12 @@ ComfyUI 본체, Python 런타임, 모델 파일, LoRA 파일, 생성 이미지, 
 6. 같은 전용 메뉴에서 이미지 가로·세로 해상도를 수정하면 다음 생성 요청부터 적용합니다.
 
 재부팅 후에는 `E:\Chatbot\Start Krea2 Chatbot.bat`를 더블클릭하면 Krea2 ComfyUI,
-Hooking Manager와 PocketRisu가 함께 실행됩니다. 현재 4.4 모듈은 다섯 개의
+Hooking Manager와 PocketRisu가 함께 실행됩니다. 현재 4.4.1 모듈은 다섯 개의
 개별 문단 토큰을 프리셋에서 조립하며, 실사·2D 같은 렌더링 스타일도 프리셋이
 결정하도록 분리되어 있습니다.
+
+모듈 메뉴는 실제 코드에서 사용하는 발동, 이미지발동, 프리셋, 키비주얼 위치,
+저장 개수만 유지하며 사용되지 않는 기존 NAI 옵션은 제거했습니다.
 
 자세한 설치와 검증 방법은 `integration/README.md`와 `hooking_manager/README.md`를 참고하세요.
 

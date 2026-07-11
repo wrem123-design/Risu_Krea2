@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.1"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -101,6 +101,21 @@ PRESET = """[Positive]
 
 shot on smartphone, photorealistic real-world photography, realistic skin texture, natural optical depth of field, {details}
 """
+
+MODULE_TOGGLES = """=🌠삽화=group
+lb-xnai.lazy=발　　　동=select=즉시,누르면
+lb-xnai.generation=이미지발동=select=즉시,누르면
+=프롬프트 생성 후 이미지까지 즉시 생성?=caption
+=———————📒스타일=divider
+lb-xnai.preset=프　리　셋=text
+="프리셋 X" 로어북 사용. "X" 부분만 입력. 기본 "1"=caption
+=———————🌠키비주얼=divider
+lb-xnai.kv.position=위　　　치=select=위,아래
+=———————⚙️시스템=divider
+lb-xnai.maxSaves=저장　개수=text
+=저장할 이전 이미지 프롬프트 기록 수=caption
+=최소 1, 기본 3=caption
+==groupEnd"""
 
 VALIDATOR_LUA = r"""local function trimText(value)
   if type(value) ~= 'string' then
@@ -529,8 +544,11 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4-krea2"
+        data["character_version"] = "4.4.1-krea2"
         data["modification_date"] = int(time.time())
+        extensions = _as_object(data["extensions"], "card extensions")
+        risuai = _as_object(extensions["risuai"], "RisuAI extensions")
+        risuai["toggles"] = MODULE_TOGGLES
         character_book["entries"] = filtered_entries
         encoded_card = (json.dumps(card, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
         encoded_legacy_module = _build_legacy_module(source, source_archive, replacements)
