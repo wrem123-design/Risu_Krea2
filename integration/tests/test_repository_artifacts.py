@@ -13,6 +13,7 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 WORKFLOW = REPOSITORY / "workflow" / "Krea2_turbo_chatbot.json"
 BUILDER = REPOSITORY / "integration" / "tools" / "build_krea2_integration.py"
 LAUNCHER = REPOSITORY / "integration" / "start_krea2_stack.ps1"
+ONE_CLICK_LAUNCHER = REPOSITORY / "integration" / "start_krea2_chatbot.bat"
 HOOK_PATCH = (
     REPOSITORY
     / "hooking_manager"
@@ -22,15 +23,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.2 module artifact."""
+    """Return the single published Krea2 4.3 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.2" in path.name
+        if "Krea2 4.3" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.2 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.3 module, found {matches}")
     return matches[0]
 
 
@@ -56,19 +57,21 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_42_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_43_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.2")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.3")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
         }
         self.assertEqual(entries["프리셋 1"].strip(), "[Positive]\n{prompt}")
         self.assertIn("[[KREA2_CHARACTER:", entries["lb-xnai.gen"])
+        self.assertIn("ensurePhotorealistic", entries["lb-xnai.gen"])
+        self.assertIn("photorealistic", entries["lb-xnai.lb.onValidate"].lower())
         self.assertIn("negative = ''", entries["lb-xnai.gen"])
         for field in ("appearance:", "outfit:", "background:", "composition:", "details:"):
             self.assertIn(field, entries["lb-xnai.lb.format"])
@@ -84,6 +87,9 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("'--listen', '127.0.0.1'", launcher)
         self.assertIn("'--port', '8190'", launcher)
         self.assertIn("-WindowStyle Hidden", launcher)
+        one_click = ONE_CLICK_LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("start_krea2_stack.ps1", one_click)
+        self.assertIn("PocketRisu.exe", one_click)
 
     def test_builder_compiles_and_hook_patch_contains_routing_contract(self) -> None:
         py_compile.compile(str(BUILDER), doraise=True)

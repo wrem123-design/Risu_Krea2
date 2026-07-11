@@ -9,7 +9,8 @@ existing ComfyUI installation and original module remain unchanged.
 - Krea2 ComfyUI: `http://127.0.0.1:8190`
 - Hooking Manager / PocketRisu image endpoint: `http://127.0.0.1:8189`
 
-Run `start_krea2_stack.ps1` to start both services. The script is idempotent and
+Double-click `E:\Chatbot\Start Krea2 Chatbot.bat` after a reboot to start both
+services and PocketRisu. The batch file calls `start_krea2_stack.ps1`, which is idempotent and
 does not start a second process when a port is already listening.
 The ComfyUI process uses the same `--use-flash-attention` and isolated Python
 launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
@@ -17,7 +18,7 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.2.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.3.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -33,13 +34,16 @@ is assembled into five English natural-language paragraphs: appearance, outfit,
 background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words, and the module rejects missing
 or underspecified paragraphs before requesting an image.
-Version 4.2 also sends the descriptor's canonical English character name as an
+Version 4.3 sends the descriptor's canonical English character name as an
 internal routing marker. Hooking Manager removes that marker before CLIP
 encoding and applies at most one exactly matched character LoRA. Empty or
 unmatched names bypass the dynamic LoRA node completely.
 Only `프리셋 1` is included, and its complete content is
 `[Positive]` followed by `{prompt}`. The Lua parser accepts this positive-only
 preset without requiring a `[Negative]` section.
+The fifth paragraph must explicitly request photorealistic real-world photography.
+Validation rejects missing photorealism, and the generator adds a fixed photographic
+fallback if an unvalidated descriptor reaches generation.
 
 ## Workflow contract
 

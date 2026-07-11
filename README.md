@@ -19,6 +19,10 @@ ComfyUI 본체, Python 런타임, 모델 파일, LoRA 파일, 생성 이미지, 
 4. 이름이 정확히 일치하면 해당 LoRA 하나만 적용합니다.
 5. 빈칸이거나 일치하지 않으면 캐릭터 LoRA 노드를 요청 그래프에서 제거합니다.
 
+재부팅 후에는 `E:\Chatbot\Start Krea2 Chatbot.bat`를 더블클릭하면 Krea2 ComfyUI,
+Hooking Manager와 PocketRisu가 함께 실행됩니다. 현재 4.3 모듈은 모든 이미지의
+다섯 번째 문단에 실사 사진 표현을 필수로 요구합니다.
+
 자세한 설치와 검증 방법은 `integration/README.md`와 `hooking_manager/README.md`를 참고하세요.
 
 ## 저장소 자체 검증
