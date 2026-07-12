@@ -1,0 +1,73 @@
+diff --git a/server.py b/server.py
+index 24a5644..2740c3a 100644
+--- a/server.py
++++ b/server.py
+@@ -3621,6 +3621,34 @@ async def handle_api_krea2_lora_config(request: web.Request) -> web.Response:
+ 
+ 
+ # ─── 미들웨어 ────────────────────────────────────────────
++@web.middleware
++async def cors_middleware(request, handler):
++    """Handle PocketRisu browser preflights and expose ComfyUI proxy responses."""
++
++    origin = request.headers.get("Origin", "*")
++    requested_headers = request.headers.get(
++        "Access-Control-Request-Headers", "Authorization, Content-Type"
++    )
++    cors_headers = {
++        "Access-Control-Allow-Origin": origin,
++        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
++        "Access-Control-Allow-Headers": requested_headers,
++        "Access-Control-Allow-Credentials": "true",
++        "Access-Control-Max-Age": "86400",
++        "Vary": "Origin",
++    }
++    if request.method == "OPTIONS":
++        return web.Response(status=204, headers=cors_headers)
++
++    try:
++        response = await handler(request)
++    except web.HTTPException as error:
++        response = error
++    if not response.prepared:
++        response.headers.update(cors_headers)
++    return response
++
++
+ @web.middleware
+ async def log_middleware(request, handler):
+     log_to_file("requests.log", f">>> {request.method} {request.path_qs}")
+@@ -3637,7 +3665,10 @@ async def log_middleware(request, handler):
+ 
+ 
+ # ─── 앱 설정 ─────────────────────────────────────────────
+-app = web.Application(middlewares=[log_middleware], client_max_size=200*1024*1024)
++app = web.Application(
++    middlewares=[cors_middleware, log_middleware],
++    client_max_size=200*1024*1024,
++)
+ 
+ # ComfyUI 프록시 라우트
+ app.router.add_post("/prompt", handle_prompt)
+diff --git a/tests/test_krea2_character_lora.py b/tests/test_krea2_character_lora.py
+index a66fd8a..121bb93 100644
+--- a/tests/test_krea2_character_lora.py
++++ b/tests/test_krea2_character_lora.py
+@@ -539,5 +539,17 @@ class ServerIntegrationContractTests(unittest.TestCase):
+         self.assertIn("preset_routes", server)
+         self.assertIn("preset=krea2_preset", server)
+ 
++    def test_server_handles_browser_cors_preflight_for_comfy_routes(self) -> None:
++        """Allow PocketRisu's Authorization-bearing cross-origin requests."""
++
++        server = SERVER_PATH.read_text(encoding="utf-8")
++
++        self.assertIn("async def cors_middleware", server)
++        self.assertIn('request.method == "OPTIONS"', server)
++        self.assertIn('Access-Control-Allow-Origin', server)
++        self.assertIn('Access-Control-Allow-Headers', server)
++        self.assertIn('Authorization', server)
++        self.assertIn('middlewares=[cors_middleware, log_middleware]', server)
++
+ if __name__ == "__main__":
+     unittest.main()

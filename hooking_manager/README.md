@@ -21,6 +21,10 @@
 전체 실행을 캐시해 빈 `outputs`를 반환하지 않으므로 PocketRisu의 `filename` 오류를
 방지합니다.
 
+`patches/0003-pocketrisu-browser-cors.patch`는 PocketRisu가 브라우저에서 보내는
+`OPTIONS` 사전 요청과 `Authorization` 헤더를 허용합니다. `/prompt`, `/history`,
+`/view`가 포트 또는 터널 주소를 거쳐 호출될 때 CORS로 차단되는 문제를 방지합니다.
+
 ## 적용
 
 Hooking Manager 저장소 루트에서 실행합니다.
@@ -28,6 +32,7 @@ Hooking Manager 저장소 루트에서 실행합니다.
 ```powershell
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0001-krea2-character-lora-routing.patch
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0002-randomize-krea2-workflow-seeds.patch
+git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0003-pocketrisu-browser-cors.patch
 ```
 
 로컬 `config.json`에는 다음 키를 추가합니다. 실제 환경에 맞는 원본 Krea2 워크플로 경로를 사용하세요.

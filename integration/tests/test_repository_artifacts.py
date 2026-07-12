@@ -29,6 +29,12 @@ HOOK_SEED_PATCH = (
     / "patches"
     / "0002-randomize-krea2-workflow-seeds.patch"
 )
+HOOK_CORS_PATCH = (
+    REPOSITORY
+    / "hooking_manager"
+    / "patches"
+    / "0003-pocketrisu-browser-cors.patch"
+)
 
 
 def module_path() -> Path:
@@ -332,6 +338,7 @@ class RepositoryArtifactTests(unittest.TestCase):
         py_compile.compile(str(BUILDER), doraise=True)
         patch = HOOK_PATCH.read_text(encoding="utf-8")
         seed_patch = HOOK_SEED_PATCH.read_text(encoding="utf-8")
+        cors_patch = HOOK_CORS_PATCH.read_text(encoding="utf-8")
 
         self.assertIn("/api/krea2_lora/config", patch)
         self.assertIn("Krea2 캐릭터 LoRA (동적)", patch)
@@ -350,6 +357,9 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("randomize_workflow_seeds", seed_patch)
         self.assertIn('(\"seed\", \"noise_seed\")', seed_patch)
         self.assertIn("Krea2 seed 무작위화", seed_patch)
+        self.assertIn("cors_middleware", cors_patch)
+        self.assertIn("Access-Control-Allow-Origin", cors_patch)
+        self.assertIn('request.method == "OPTIONS"', cors_patch)
 
 
 if __name__ == "__main__":
