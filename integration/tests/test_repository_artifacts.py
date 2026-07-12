@@ -24,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.6 module artifact."""
+    """Return the single published Krea2 4.4.7 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.6" in path.name
+        if "Krea2 4.4.7" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.6 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.7 module, found {matches}")
     return matches[0]
 
 
@@ -103,13 +103,48 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("must include a key visual", builder.VALIDATOR_LUA)
         self.assertIn("must not include a key visual", builder.VALIDATOR_LUA)
 
-    def test_module_is_valid_positive_only_krea2_446_archive(self) -> None:
+    def test_select_indices_and_runtime_safety_are_normalized(self) -> None:
+        """Match PocketRisu's stored select indices and guard runtime boundaries."""
+
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertIn("`0` means automatic", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("`2` forbids keyvis", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("`2` favors meaningful moments nearer the end", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("resolveKeyVisualPolicy", builder.VALIDATOR_LUA)
+        self.assertIn("raw == '2'", builder.VALIDATOR_LUA)
+        self.assertIn("maxSaves < 1", builder.GENERATOR_LUA)
+        self.assertIn("maxSaves > 20", builder.GENERATOR_LUA)
+
+        with zipfile.ZipFile(module_path()) as archive:
+            card = json.loads(archive.read("card.json").decode("utf-8"))
+        entries = {
+            entry["name"]: entry["content"]
+            for entry in card["data"]["character_book"]["entries"]
+        }
+        on_output = entries["lb-xnai.lb.onOutput"]
+        self.assertIn("toggle_lb-xnai.keyVisual", on_output)
+        self.assertIn("toggle_lb-xnai.kv.position", on_output)
+        self.assertIn("keyVisualPolicy == '2'", on_output)
+        self.assertIn("response.keyvis = nil", on_output)
+        self.assertIn("return keyVisualNode .. '\\n\\n' .. slotted", on_output)
+        self.assertIn("toggle_lb-xnai.generation') == '0'", on_output)
+        self.assertIn(
+            "toggle_lb-xnai.lazy') or '0'",
+            entries["lb-xnai.lb.onInput"],
+        )
+
+    def test_module_is_valid_positive_only_krea2_447_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.6")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.7")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]

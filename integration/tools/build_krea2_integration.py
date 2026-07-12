@@ -40,13 +40,13 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.6"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.7"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
-Read the current chat, its setting, and the per-bot lorebook named `lb-xnai.lb.extra`. The image-count setting is `{{getglobalvar::toggle_lb-xnai.imageCount}}`: when it is empty or `자동(4~6)`, create a minimum of 4 and a maximum of 6 image descriptions; when it is an integer from 1 through 6, create exactly that many. A key visual counts toward the requested total.
+Read the current chat, its setting, and the per-bot lorebook named `lb-xnai.lb.extra`. The image-count setting is `{{getglobalvar::toggle_lb-xnai.imageCount}}`: `0` means automatic selection of a minimum of 4 and a maximum of 6 image descriptions, while an integer from 1 through 6 requires exactly that many. A missing or invalid value also uses automatic mode. A key visual counts toward the requested total.
 
-The key-visual setting is `{{getglobalvar::toggle_lb-xnai.keyVisual}}`: `자동` lets you include one only when it is useful, `항상 포함` requires exactly one key visual, and `사용 안 함` forbids keyvis. The scene-selection setting is `{{getglobalvar::toggle_lb-xnai.sceneSelection}}`: `균형 배치` distributes images across meaningful paragraph boundaries, `핵심 장면 우선` selects the strongest visually consequential moments, and `후반부 우선` favors meaningful moments nearer the end while retaining enough context. Empty settings use the automatic and balanced defaults.
+The key-visual setting is `{{getglobalvar::toggle_lb-xnai.keyVisual}}`: `0` is automatic and includes one only when useful, `1` requires exactly one key visual, and `2` forbids keyvis. The scene-selection setting is `{{getglobalvar::toggle_lb-xnai.sceneSelection}}`: `0` distributes images evenly across meaningful paragraph boundaries, `1` selects the strongest visually consequential moments, and `2` favors meaningful moments nearer the end while retaining enough context. Missing or invalid values use automatic keyvis and balanced scene selection.
 
 Each image may contain one to three identifiable characters. Use one character for genuinely solitary moments. When the selected narrative moment depends on dialogue, eye contact, touch, confrontation, assistance, or another visible relationship, include the required supporting characters with their faces and bodies visible instead of converting them into off-screen presences or anonymous cropped limbs. Never add unrelated crowd members merely to fill the frame.
 
@@ -135,7 +135,7 @@ lb-xnai.kv.position=위　　　치=select=위,아래
 =———————⚙️시스템=divider
 lb-xnai.maxSaves=저장　개수=text
 =저장할 이전 이미지 프롬프트 기록 수=caption
-=최소 1, 기본 3=caption
+=1~20, 기본 3=caption
 ==groupEnd"""
 
 VALIDATOR_LUA = r"""local function trimText(value)
@@ -168,6 +168,16 @@ local function resolveImageCountRule(triggerId)
     return exact, exact
   end
   return 4, 6
+end
+
+local function resolveKeyVisualPolicy(triggerId)
+  local raw = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
+  if raw == '1' or raw == '항상 포함' then
+    return 'required'
+  elseif raw == '2' or raw == '사용 안 함' then
+    return 'disabled'
+  end
+  return 'automatic'
 end
 
 local function validateDescriptor(desc, label, requireSlot, structuralErrors, repairFields)
@@ -233,10 +243,10 @@ local function main(triggerId, output)
     end
   end
 
-  local keyVisualPolicy = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
-  if keyVisualPolicy == '항상 포함' and not response.keyvis then
+  local keyVisualPolicy = resolveKeyVisualPolicy(triggerId)
+  if keyVisualPolicy == 'required' and not response.keyvis then
     table.insert(structuralErrors, 'The response must include a key visual.')
-  elseif keyVisualPolicy == '사용 안 함' and response.keyvis then
+  elseif keyVisualPolicy == 'disabled' and response.keyvis then
     table.insert(structuralErrors, 'The response must not include a key visual.')
   end
 
@@ -420,7 +430,12 @@ end
 
 local function persistStateAndHistory(triggerId, xnaiState)
   local safeState = type(xnaiState) == 'table' and xnaiState or {}
-  local maxSaves = tonumber(getGlobalVar(triggerId, 'toggle_lb-xnai.maxSaves')) or 3
+  local maxSaves = math.floor(tonumber(getGlobalVar(triggerId, 'toggle_lb-xnai.maxSaves')) or 3)
+  if maxSaves < 1 then
+    maxSaves = 1
+  elseif maxSaves > 20 then
+    maxSaves = 20
+  end
   while #safeState > maxSaves do
     table.remove(safeState, 1)
   end
@@ -562,6 +577,45 @@ def _append_output_link(node: JsonObject, slot: int, link_id: int) -> None:
     node_output["links"] = links
 
 
+def _upgrade_on_output_lua(content: str) -> str:
+    """Apply key-visual policy and placement to the inherited output hook."""
+
+    policy_anchor = """    ---@type XNAIStackItem
+    local stackItem = {"""
+    policy_replacement = """    local keyVisualPolicy = getGlobalVar(tid, 'toggle_lb-xnai.keyVisual') or '0'
+    if keyVisualPolicy == '2' then
+      response.keyvis = nil
+    end
+
+    ---@type XNAIStackItem
+    local stackItem = {"""
+    placement_anchor = """    if inlays['-1'] then
+      return slotted .. '\\n\\n<lb-xnai kv>' .. inlays['-1'] .. '</lb-xnai>', '<lb-lazy id="lb-xnai" />'
+    end
+
+    return slotted .. '\\n\\n<lb-xnai kv />', '<lb-lazy id="lb-xnai" />'"""
+    placement_replacement = """    if inlays['-1'] then
+      local keyVisualNode = '<lb-xnai kv>' .. inlays['-1'] .. '</lb-xnai>'
+      local keyVisualPosition = getGlobalVar(tid, 'toggle_lb-xnai.kv.position') or '0'
+      if keyVisualPosition == '0' then
+        return keyVisualNode .. '\\n\\n' .. slotted, '<lb-lazy id="lb-xnai" />'
+      end
+      return slotted .. '\\n\\n' .. keyVisualNode, '<lb-lazy id="lb-xnai" />'
+    end
+
+    if keyVisualPolicy == '2' then
+      return slotted, '<lb-lazy id="lb-xnai" />'
+    end
+    return slotted .. '\\n\\n<lb-xnai kv />', '<lb-lazy id="lb-xnai" />'"""
+
+    if "toggle_lb-xnai.keyVisual" not in content:
+        if policy_anchor not in content or placement_anchor not in content:
+            raise ValueError("Source module output hook has an unsupported layout")
+        content = content.replace(policy_anchor, policy_replacement, 1)
+        content = content.replace(placement_anchor, placement_replacement, 1)
+    return content
+
+
 def build_module(source: Path, output: Path) -> None:
     """Create a new CCv3 module with the Krea2 natural-language contract."""
 
@@ -599,6 +653,8 @@ def build_module(source: Path, output: Path) -> None:
                 entry["content"] = replacements[name]
                 entry["enabled"] = True
                 found.add(name)
+            if name == "lb-xnai.lb.onOutput":
+                entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
             filtered_entries.append(entry)
 
         if "프리셋 2D" not in found:
@@ -617,7 +673,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.6-krea2"
+        data["character_version"] = "4.4.7-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
@@ -706,6 +762,8 @@ def _build_legacy_module(
         if isinstance(name, str) and name in replacements:
             entry["content"] = replacements[name]
             found.add(name)
+        if name == "lb-xnai.lb.onOutput":
+            entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
         filtered_lorebook.append(entry)
 
     if "프리셋 2D" not in found:
