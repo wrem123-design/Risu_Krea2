@@ -23,15 +23,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.2 module artifact."""
+    """Return the single published Krea2 4.4.3 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.2" in path.name
+        if "Krea2 4.4.3" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.2 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.3 module, found {matches}")
     return matches[0]
 
 
@@ -57,13 +57,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_442_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_443_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.2")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.3")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -74,6 +74,10 @@ class RepositoryArtifactTests(unittest.TestCase):
             "shot on smartphone, photorealistic real-world photography, realistic skin texture, "
             "natural optical depth of field, {details}",
         )
+        self.assertIn("high-quality anime illustration", entries["프리셋 2D"])
+        self.assertIn("rather than a real photograph", entries["프리셋 2D"])
+        self.assertNotIn("photorealistic real-world photography", entries["프리셋 2D"])
+        self.assertIn("[[KREA2_PRESET:", entries["lb-xnai.gen"])
         self.assertIn("[[KREA2_CHARACTER:", entries["lb-xnai.gen"])
         self.assertIn("[[KREA2_MULTI_CHARACTER]]", entries["lb-xnai.gen"])
         self.assertIn("character_count", entries["lb-xnai.lb.onValidate"])
@@ -141,6 +145,10 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn('id="krea2-resolution-width"', patch)
         self.assertIn('id="krea2-resolution-height"', patch)
         self.assertIn("KREA2_MULTI_CHARACTER", patch)
+        self.assertIn("validate_preset_routes", patch)
+        self.assertIn("resolve_preset_loras", patch)
+        self.assertIn('data-field="preset-id"', patch)
+        self.assertIn("2D", patch)
 
 
 if __name__ == "__main__":
