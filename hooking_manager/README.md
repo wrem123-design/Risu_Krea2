@@ -12,6 +12,9 @@
 - 빈칸 또는 불일치 시 동적 LoRA 노드 삭제 및 fedor 경로 우회
 - 원본 워크플로 해상도 표시와 가로·세로 오버라이드 저장
 - 다음 생성 요청의 `Image Width`·`Image Height` 노드에 저장값 적용
+- 모듈의 `[[KREA2_PRESET:X]]` 표식과 후킹 매니저의 프리셋 식별자 연결
+- 프리셋별 `캐릭터 매칭`, `선택 LoRA 일괄 적용`, `미적용` 모드
+- `프리셋 2D`를 사용할 때 식별자 `2D`로 선택한 그림체 LoRA 일괄 적용
 
 ## 적용
 
@@ -29,7 +32,10 @@ git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0001-krea2-character-lor
 }
 ```
 
-`config.json`과 `krea2_character_lora_map.json`은 컴퓨터별 로컬 상태이므로 이 저장소에 커밋하지 않습니다. 매핑 파일은 캐릭터 연결과 함께 해상도 오버라이드도 보관합니다.
+`config.json`과 `krea2_character_lora_map.json`은 컴퓨터별 로컬 상태이므로 이 저장소에 커밋하지 않습니다. 매핑 파일은 캐릭터 연결, 프리셋별 LoRA 동작, 해상도 오버라이드를 함께 보관합니다.
+
+프리셋 식별자는 임의의 별칭이 아닙니다. 모듈 메뉴가 `프리셋 X` 로어북을 선택할 때의
+`X`와 정확히 같아야 합니다. 예를 들어 `프리셋 2D`는 후킹 매니저에 `2D`로 등록합니다.
 
 ## 검증
 

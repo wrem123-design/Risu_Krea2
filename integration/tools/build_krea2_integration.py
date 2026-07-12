@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.2"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.3"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -102,6 +102,18 @@ PRESET = """[Positive]
 {composition}
 
 shot on smartphone, photorealistic real-world photography, realistic skin texture, natural optical depth of field, {details}
+"""
+
+PRESET_2D = """[Positive]
+{appearance}
+
+{outfit}
+
+{background}
+
+{composition}
+
+high-quality anime illustration, polished soft-shaded digital painting, clean delicate line art, smooth gradients, subtle painterly rendering, refined modern manga/manhwa aesthetic, muted cinematic color palette. the image should feel like a carefully composed contemporary anime scene rather than a real photograph, {details}
 """
 
 MODULE_TOGGLES = """=🌠삽화=group
@@ -261,6 +273,10 @@ local function buildPresetPrompt(triggerId, desc)
   if not preset or preset == '' or preset == 'null' then
     preset = '1'
   end
+  preset = trimText(tostring(preset))
+  if preset == '' or preset:find('[%[%]\r\n]') then
+    preset = '1'
+  end
 
   local presetBook = prelude.getPriorityLoreBook(triggerId, '프리셋 ' .. tostring(preset))
   if not presetBook or not presetBook.content or presetBook.content == '' then
@@ -324,6 +340,7 @@ local function buildPresetPrompt(triggerId, desc)
   else
     positive = '[[KREA2_MULTI_CHARACTER]]\n' .. positive
   end
+  positive = '[[KREA2_PRESET:' .. tostring(preset) .. ']]\n' .. positive
 
   local negative = ''
   return { positive = positive, negative = negative }
@@ -542,12 +559,17 @@ def build_module(source: Path, output: Path) -> None:
             "lb-xnai.lb.onValidate": VALIDATOR_LUA,
             "lb-xnai.gen": GENERATOR_LUA,
             "프리셋 1": PRESET,
+            "프리셋 2D": PRESET_2D,
         }
         found: set[str] = set()
         filtered_entries: list[JsonObject] = []
+        preset_template: JsonObject | None = None
+        allowed_presets = {"프리셋 1", "프리셋 2D"}
         for entry in entries:
             name = entry.get("name")
-            if isinstance(name, str) and name.startswith("프리셋 ") and name != "프리셋 1":
+            if name == "프리셋 1":
+                preset_template = copy.deepcopy(entry)
+            if isinstance(name, str) and name.startswith("프리셋 ") and name not in allowed_presets:
                 continue
             if isinstance(name, str) and name in replacements:
                 entry["content"] = replacements[name]
@@ -555,12 +577,23 @@ def build_module(source: Path, output: Path) -> None:
                 found.add(name)
             filtered_entries.append(entry)
 
+        if "프리셋 2D" not in found:
+            if preset_template is None:
+                raise ValueError("Source module is missing 프리셋 1 template")
+            preset_2d = copy.deepcopy(preset_template)
+            preset_2d["name"] = "프리셋 2D"
+            preset_2d["comment"] = "프리셋 2D"
+            preset_2d["content"] = PRESET_2D
+            preset_2d["enabled"] = True
+            filtered_entries.append(preset_2d)
+            found.add("프리셋 2D")
+
         missing = set(replacements) - found
         if missing:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.2-krea2"
+        data["character_version"] = "4.4.3-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
@@ -638,14 +671,27 @@ def _build_legacy_module(
 
     found: set[str] = set()
     filtered_lorebook: list[JsonObject] = []
+    preset_template: JsonObject | None = None
+    allowed_presets = {"프리셋 1", "프리셋 2D"}
     for entry in lorebook:
         name = entry.get("comment")
-        if isinstance(name, str) and name.startswith("프리셋 ") and name != "프리셋 1":
+        if name == "프리셋 1":
+            preset_template = copy.deepcopy(entry)
+        if isinstance(name, str) and name.startswith("프리셋 ") and name not in allowed_presets:
             continue
         if isinstance(name, str) and name in replacements:
             entry["content"] = replacements[name]
             found.add(name)
         filtered_lorebook.append(entry)
+
+    if "프리셋 2D" not in found:
+        if preset_template is None:
+            raise ValueError("Legacy module is missing 프리셋 1 template")
+        preset_2d = copy.deepcopy(preset_template)
+        preset_2d["comment"] = "프리셋 2D"
+        preset_2d["content"] = PRESET_2D
+        filtered_lorebook.append(preset_2d)
+        found.add("프리셋 2D")
 
     missing = set(replacements) - found
     if missing:
