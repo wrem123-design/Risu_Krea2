@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.9"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.10"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -781,7 +781,7 @@ def _upgrade_on_output_lua(content: str) -> str:
     ---@type XNAIStackItem"""
     count_replacement = """    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
     if not imageCountValid then
-      return nil, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
+      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
     end
     gen.updateExtraRegistry(tid, response)
 
@@ -790,6 +790,18 @@ def _upgrade_on_output_lua(content: str) -> str:
         if count_anchor not in content:
             raise ValueError("Source module output hook cannot enforce image count")
         content = content.replace(count_anchor, count_replacement, 1)
+    content = content.replace(
+        "return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
+        "return fullChatContent, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
+    )
+    content = content.replace(
+        "return nil, '<lb-lazy id=\"lb-xnai\">오류: 빈 응답.</lb-lazy>'",
+        "return fullChatContent, '<lb-lazy id=\"lb-xnai\">오류: 빈 응답.</lb-lazy>'",
+    )
+    content = content.replace(
+        "return nil, '<lb-lazy id=\"lb-xnai\" />'",
+        "return fullChatContent, '<lb-lazy id=\"lb-xnai\">오류: 삽화 응답을 해석하지 못했습니다.</lb-lazy>'",
+    )
     return content
 
 
@@ -850,7 +862,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.9-krea2"
+        data["character_version"] = "4.4.10-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

@@ -24,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.9 module artifact."""
+    """Return the single published Krea2 4.4.10 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.9" in path.name
+        if "Krea2 4.4.10" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.9 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.10 module, found {matches}")
     return matches[0]
 
 
@@ -126,6 +126,8 @@ class RepositoryArtifactTests(unittest.TestCase):
         on_output = entries["lb-xnai.lb.onOutput"]
         self.assertIn("gen.validateResponseImageCount(tid, response)", on_output)
         self.assertIn("설정한 이미지 장수와 맞지 않습니다", on_output)
+        self.assertIn("return fullChatContent, '<lb-lazy", on_output)
+        self.assertNotIn("return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수", on_output)
 
     def test_select_indices_and_runtime_safety_are_normalized(self) -> None:
         """Match PocketRisu's stored select indices and guard runtime boundaries."""
@@ -200,13 +202,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_449_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_4410_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.9")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.10")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
