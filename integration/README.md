@@ -23,7 +23,7 @@ the original zero-retry fallback.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.11.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.12.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -43,7 +43,7 @@ background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words. Missing paragraphs are repaired,
 while shorter non-empty prose is retained so a weak auxiliary model does not
 replace a usable response with a worse full rewrite.
-Version 4.4.11 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.12 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's canonical English name as an internal routing marker, and Hooking
@@ -73,12 +73,14 @@ zero-based indices. Disabled keyvis is enforced both during validation and immed
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
-The 4.4.11 output hook completes weak-model short replies before any ComfyUI
+The 4.4.12 output hook completes weak-model short replies before any ComfyUI
 request. If the initial response contains only one usable descriptor, each missing
 descriptor is requested separately and merged into the response. A deterministic
 camera-composition variant is used only when a focused completion call fails, so
 automatic mode still produces four images instead of aborting or rewriting the
-entire valid response.
+entire valid response. The output boundary repeats the completion check as a
+cache-safe guard, imports a versioned generator entry, and records planned,
+successful, and failed generation counts in `lb-xnai-last-generation-debug`.
 
 Temporary extras use per-descriptor identity records and a chat-scoped
 `lb-xnai-extra-registry-v1` state. Only records marked `source=extra` are retained,

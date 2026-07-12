@@ -40,7 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.11"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.12"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4412"
 LIGHTBOARD_BACKEND_NAME = "🔦라이트보드 - 3.4.0.1 Krea2"
 XNAI_DEFAULT_VALIDATION_RETRIES = 2
 
@@ -928,6 +929,73 @@ def _append_output_link(node: JsonObject, slot: int, link_id: int) -> None:
 def _upgrade_on_output_lua(content: str) -> str:
     """Apply key-visual policy and placement to the inherited output hook."""
 
+    runtime_guard = r"""
+local outputFallbackVariations = {
+  'Use a wider environmental framing that clearly shows spatial relationships and the full interaction.',
+  'Use a medium two-thirds view from a contrasting side angle, preserving the action while changing visual emphasis.',
+  'Use a closer reaction-focused framing with foreground depth and a clearly different gaze or gesture emphasis.',
+  'Use an over-the-shoulder or layered depth composition that reveals the opposing participant or important story object.',
+  'Use a low or elevated establishing angle that remains faithful to the same location and narrative continuity.',
+}
+
+local function cloneOutputValue(value)
+  if type(value) ~= 'table' then return value end
+  local copied = {}
+  for key, item in pairs(value) do copied[key] = cloneOutputValue(item) end
+  return copied
+end
+
+-- Final cache-safe guard. This deliberately lives in onOutput instead of only
+-- in lb-xnai.gen, because PocketRisu can retain an older imported lorebook
+-- function for the lifetime of an already-open browser session.
+local function completeResponseAtOutputBoundary(tid, response)
+  response.scenes = type(response.scenes) == 'table' and response.scenes or {}
+  local current = #response.scenes + (response.keyvis and 1 or 0)
+  local raw = tostring(getGlobalVar(tid, 'toggle_lb-xnai.imageCount') or '')
+  local exact = tonumber(raw)
+  local target
+  if exact and exact % 1 == 0 and exact >= 1 and exact <= 6 then
+    target = exact
+  else
+    target = math.max(4, math.min(6, current))
+  end
+
+  local base = response.scenes[1] or response.keyvis
+  while current < target and type(base) == 'table' do
+    local ordinal = current + 1
+    local copy = cloneOutputValue(base)
+    local variation = outputFallbackVariations[((ordinal - 1) % #outputFallbackVariations) + 1]
+    copy.composition = tostring(copy.composition or '') .. ' ' .. variation
+    copy.details = tostring(copy.details or '') .. ' Keep this shot visually distinct while preserving identity, clothing, location, and story continuity.'
+    copy.slot = nil
+    table.insert(response.scenes, copy)
+    current = current + 1
+  end
+
+  while exact and current > target and #response.scenes > 0 do
+    table.remove(response.scenes)
+    current = current - 1
+  end
+
+  local used = {}
+  for index, scene in ipairs(response.scenes) do
+    local slot = tonumber(scene.slot)
+    if not slot or slot % 1 ~= 0 or slot < 0 or used[slot] then
+      slot = index - 1
+      while used[slot] do slot = slot + 1 end
+    end
+    used[slot] = true
+    scene.slot = slot
+  end
+  return response
+end
+"""
+    main_anchor = "---@param tid string\n---@param output string"
+    if "completeResponseAtOutputBoundary" not in content:
+        if main_anchor not in content:
+            raise ValueError("Source module output hook cannot attach count guard")
+        content = content.replace(main_anchor, runtime_guard + "\n" + main_anchor, 1)
+
     policy_anchor = """    ---@type XNAIStackItem
     local stackItem = {"""
     policy_replacement = """    local keyVisualPolicy = getGlobalVar(tid, 'toggle_lb-xnai.keyVisual') or '0'
@@ -980,10 +1048,10 @@ def _upgrade_on_output_lua(content: str) -> str:
 
     ---@type XNAIStackItem"""
     count_replacement = """    local completionOk, completionResult = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
-    if not completionOk or not completionResult then
-      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 부족한 이미지 설명을 추가하지 못했습니다. ' .. tostring(completionResult) .. '</lb-lazy>'
+    if completionOk and completionResult then
+      response = completionResult
     end
-    response = completionResult
+    response = completeResponseAtOutputBoundary(tid, response)
     local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
     if not imageCountValid then
       return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
@@ -995,6 +1063,86 @@ def _upgrade_on_output_lua(content: str) -> str:
         if count_anchor not in content:
             raise ValueError("Source module output hook cannot enforce image count")
         content = content.replace(count_anchor, count_replacement, 1)
+    content = content.replace(
+        "prelude.import(tid, 'lb-xnai.gen')",
+        f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+    )
+    generation_anchor = """    ---@type table<string, string>
+    local inlays = {}
+"""
+    generation_replacement = """    ---@type table<string, string>
+    local inlays = {}
+    local plannedCount = #(response.scenes or {}) + (response.keyvis and 1 or 0)
+    local generatedCount = 0
+    local failedCount = 0
+    local firstFailure = ''
+"""
+    if "local generatedCount = 0" not in content:
+        if generation_anchor not in content:
+            raise ValueError("Source module output hook cannot attach generation diagnostics")
+        content = content.replace(generation_anchor, generation_replacement, 1)
+    content = content.replace(
+        """        if ok and inlay then
+          inlays['-1'] = inlay
+        end""",
+        """        if ok and inlay then
+          inlays['-1'] = inlay
+          generatedCount = generatedCount + 1
+        else
+          failedCount = failedCount + 1
+          if firstFailure == '' then firstFailure = tostring(inlay) end
+        end""",
+        1,
+    )
+    content = content.replace(
+        """        if ok and inlay then
+          inlays[slot] = inlay
+        end""",
+        """        if ok and inlay then
+          inlays[slot] = inlay
+          generatedCount = generatedCount + 1
+        else
+          failedCount = failedCount + 1
+          if firstFailure == '' then firstFailure = tostring(inlay) end
+        end""",
+        1,
+    )
+    persist_anchor = """    table.insert(xnaiState, stackItem)
+    xnaiState = select(1, gen.persistStateAndHistory(tid, xnaiState))"""
+    persist_replacement = """    setChatVar(tid, 'lb-xnai-last-generation-debug',
+      'configured=' .. tostring(getGlobalVar(tid, 'toggle_lb-xnai.imageCount')) ..
+      '; planned=' .. tostring(plannedCount) ..
+      '; generated=' .. tostring(generatedCount) ..
+      '; failed=' .. tostring(failedCount) ..
+      '; firstFailure=' .. firstFailure)
+    table.insert(xnaiState, stackItem)
+    xnaiState = select(1, gen.persistStateAndHistory(tid, xnaiState))"""
+    if "lb-xnai-last-generation-debug" not in content:
+        if persist_anchor not in content:
+            raise ValueError("Source module output hook cannot persist generation diagnostics")
+        content = content.replace(persist_anchor, persist_replacement, 1)
+    slot_anchor = """      if inlays[slot] then
+        slotted = slotted:gsub('%[Slot%s+' .. slot .. '%]',
+          '<lb-xnai scene="' .. slot .. '">' .. inlays[slot] .. '</lb-xnai>')
+      else
+        slotted = slotted:gsub('%[Slot%s+' .. slot .. '%]',
+          '<lb-xnai scene="' .. slot .. '" />')
+      end"""
+    slot_replacement = """      local replacement
+      if inlays[slot] then
+        replacement = '<lb-xnai scene="' .. slot .. '">' .. inlays[slot] .. '</lb-xnai>'
+      else
+        replacement = '<lb-xnai scene="' .. slot .. '" />'
+      end
+      local replaced
+      slotted, replaced = slotted:gsub('%[Slot%s+' .. slot .. '%]', replacement)
+      if replaced == 0 and inlays[slot] then
+        slotted = slotted .. '\\n\\n' .. replacement
+      end"""
+    if "local replaced" not in content:
+        if slot_anchor not in content:
+            raise ValueError("Source module output hook cannot attach unmatched image placement")
+        content = content.replace(slot_anchor, slot_replacement, 1)
     content = content.replace(
         "return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
         "return fullChatContent, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
@@ -1036,9 +1184,12 @@ def build_module(source: Path, output: Path) -> None:
         found: set[str] = set()
         filtered_entries: list[JsonObject] = []
         preset_template: JsonObject | None = None
+        generator_template: JsonObject | None = None
         allowed_presets = {"프리셋 1", "프리셋 2D"}
         for entry in entries:
             name = entry.get("name")
+            if isinstance(name, str) and name.startswith("lb-xnai.gen.v"):
+                continue
             if name == "프리셋 1":
                 preset_template = copy.deepcopy(entry)
             if isinstance(name, str) and name.startswith("프리셋 ") and name not in allowed_presets:
@@ -1047,9 +1198,25 @@ def build_module(source: Path, output: Path) -> None:
                 entry["content"] = replacements[name]
                 entry["enabled"] = True
                 found.add(name)
+            if name == "lb-xnai.gen":
+                generator_template = copy.deepcopy(entry)
+            if name == "lb-xnai.lb.onInput":
+                entry["content"] = str(entry.get("content", "")).replace(
+                    "prelude.import(tid, 'lb-xnai.gen')",
+                    f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+                )
             if name == "lb-xnai.lb.onOutput":
                 entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
             filtered_entries.append(entry)
+
+        if generator_template is None:
+            raise ValueError("Source module is missing lb-xnai.gen template")
+        versioned_generator = copy.deepcopy(generator_template)
+        versioned_generator["name"] = VERSIONED_GENERATOR_NAME
+        versioned_generator["comment"] = VERSIONED_GENERATOR_NAME
+        versioned_generator["content"] = GENERATOR_LUA
+        versioned_generator["enabled"] = True
+        filtered_entries.append(versioned_generator)
 
         if "프리셋 2D" not in found:
             if preset_template is None:
@@ -1067,7 +1234,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.11-krea2"
+        data["character_version"] = "4.4.12-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
@@ -1146,9 +1313,12 @@ def _build_legacy_module(
     found: set[str] = set()
     filtered_lorebook: list[JsonObject] = []
     preset_template: JsonObject | None = None
+    generator_template: JsonObject | None = None
     allowed_presets = {"프리셋 1", "프리셋 2D"}
     for entry in lorebook:
         name = entry.get("comment")
+        if isinstance(name, str) and name.startswith("lb-xnai.gen.v"):
+            continue
         if name == "프리셋 1":
             preset_template = copy.deepcopy(entry)
         if isinstance(name, str) and name.startswith("프리셋 ") and name not in allowed_presets:
@@ -1156,9 +1326,23 @@ def _build_legacy_module(
         if isinstance(name, str) and name in replacements:
             entry["content"] = replacements[name]
             found.add(name)
+        if name == "lb-xnai.gen":
+            generator_template = copy.deepcopy(entry)
+        if name == "lb-xnai.lb.onInput":
+            entry["content"] = str(entry.get("content", "")).replace(
+                "prelude.import(tid, 'lb-xnai.gen')",
+                f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+            )
         if name == "lb-xnai.lb.onOutput":
             entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
         filtered_lorebook.append(entry)
+
+    if generator_template is None:
+        raise ValueError("Legacy module is missing lb-xnai.gen template")
+    versioned_generator = copy.deepcopy(generator_template)
+    versioned_generator["comment"] = VERSIONED_GENERATOR_NAME
+    versioned_generator["content"] = GENERATOR_LUA
+    filtered_lorebook.append(versioned_generator)
 
     if "프리셋 2D" not in found:
         if preset_template is None:

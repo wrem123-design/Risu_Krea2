@@ -38,15 +38,15 @@ HOOK_CORS_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.11 module artifact."""
+    """Return the single published Krea2 4.4.12 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.11" in path.name
+        if "Krea2 4.4.12" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.11 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.12 module, found {matches}")
     return matches[0]
 
 
@@ -143,11 +143,22 @@ class RepositoryArtifactTests(unittest.TestCase):
             for entry in card["data"]["character_book"]["entries"]
         }
         on_output = entries["lb-xnai.lb.onOutput"]
+        self.assertIn("completeResponseAtOutputBoundary", on_output)
         self.assertIn("gen.completeResponseImageCount", on_output)
         self.assertIn("gen.validateResponseImageCount(tid, response)", on_output)
         self.assertIn("설정한 이미지 장수와 맞지 않습니다", on_output)
+        self.assertIn("lb-xnai-last-generation-debug", on_output)
+        self.assertIn("generatedCount", on_output)
         self.assertIn("return fullChatContent, '<lb-lazy", on_output)
         self.assertNotIn("return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수", on_output)
+
+        self.assertIn("lb-xnai.gen.v4412", entries)
+        self.assertEqual(entries["lb-xnai.gen.v4412"], entries["lb-xnai.gen"])
+        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4412')", on_output)
+        self.assertIn(
+            "prelude.import(tid, 'lb-xnai.gen.v4412')",
+            entries["lb-xnai.lb.onInput"],
+        )
 
     def test_lightboard_backend_defaults_xnai_validation_retries_only(self) -> None:
         """Keep Krea2 count repair active without changing unrelated manifests."""
@@ -247,13 +258,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_4411_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_4412_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.11")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.12")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
