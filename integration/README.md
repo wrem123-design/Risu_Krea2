@@ -23,7 +23,7 @@ control to `2` to retain focused repair for genuinely missing fields.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.14.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.15.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -43,7 +43,7 @@ background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words. Missing paragraphs are repaired,
 while shorter non-empty prose is retained so a weak auxiliary model does not
 replace a usable response with a worse full rewrite.
-Version 4.4.14 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.15 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's canonical English name as an internal routing marker, and Hooking
@@ -73,7 +73,7 @@ zero-based indices. Disabled keyvis is enforced both during validation and immed
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
-The 4.4.14 output hook removes malformed descriptors before any ComfyUI request,
+The 4.4.15 output hook removes malformed descriptors before any ComfyUI request,
 converts a valid disabled key visual into an ordinary scene, and asks the auxiliary
 model twice for every missing descriptor. It no longer fills the image count by
 cloning one scene, so malformed or duplicate retries stop with a clear error instead
@@ -82,6 +82,12 @@ entry and records planned, successful, and failed generation counts in
 `lb-xnai-last-generation-debug`.
 If every initial descriptor is malformed, it requests a new complete seed scene
 before filling the remaining count instead of requiring an existing valid scene.
+Initial planning and focused repair both treat meaningful cast coverage as a soft
+tie-breaker after story relevance. Repeated protagonist-only shots yield to an
+equally meaningful supporting-character or interaction moment, but passive people
+are never promoted and no gender or cast quota is enforced. Focused repairs also
+receive the active balanced, strongest-moment, or later-moment selection policy and
+a summary of the characters already represented in the selected image set.
 
 Temporary extras use per-descriptor identity records and a chat-scoped
 `lb-xnai-extra-registry-v1` state. Only records marked `source=extra` are retained,

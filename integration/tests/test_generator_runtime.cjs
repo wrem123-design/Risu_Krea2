@@ -34,10 +34,13 @@ local queue = {
 function getGlobalVar(_, name)
   if name == 'toggle_lb-xnai.imageCount' then return '4' end
   if name == 'toggle_lb-xnai.keyVisual' then return '2' end
+  if name == 'toggle_lb-xnai.sceneSelection' then return '1' end
   return ''
 end
 function getChatVar() return '' end
-function axLLM()
+local lastPromptText = ''
+function axLLM(_, prompt)
+  lastPromptText = prompt[2].content
   return { success = true, result = '<lb-xnai>candidate</lb-xnai>' }
 end
 prelude = {
@@ -83,6 +86,8 @@ local recovered = gen.completeResponseImageCount('test', {
 }, 'one\\n\\ntwo\\n\\nthree\\n\\nfour')
 assert(#recovered.scenes == 4, 'an all-malformed response was not rebuilt')
 assert(recovered.scenes[1].name == 'Fresh A', 'fresh seed scene was not requested')
+assert(lastPromptText:find('strongest visually consequential', 1, true), 'scene selection policy missing from repair prompt')
+assert(lastPromptText:find('Existing cast coverage:', 1, true), 'cast coverage missing from repair prompt')
 return true
 `;
 
@@ -94,7 +99,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.14.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.15.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));
