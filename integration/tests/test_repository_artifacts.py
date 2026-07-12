@@ -32,15 +32,15 @@ HOOK_SEED_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.10 module artifact."""
+    """Return the single published Krea2 4.4.11 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.10" in path.name
+        if "Krea2 4.4.11" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.10 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.11 module, found {matches}")
     return matches[0]
 
 
@@ -108,11 +108,11 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("toggle_lb-xnai.imageCount", builder.VALIDATOR_LUA)
         self.assertIn("toggle_lb-xnai.keyVisual", builder.VALIDATOR_LUA)
         self.assertIn("must contain exactly", builder.VALIDATOR_LUA)
-        self.assertIn("must include a key visual", builder.VALIDATOR_LUA)
-        self.assertIn("must not include a key visual", builder.VALIDATOR_LUA)
+        self.assertIn("keyVisualPolicy == '1'", builder.GENERATOR_LUA)
+        self.assertIn("keyVisualPolicy == '2'", builder.GENERATOR_LUA)
 
-    def test_invalid_image_count_is_repaired_and_blocked_before_generation(self) -> None:
-        """Do not silently generate one image when automatic mode requires 4–6."""
+    def test_missing_images_are_completed_one_at_a_time_before_generation(self) -> None:
+        """Complete weak-model one-scene replies without another full rewrite."""
 
         spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
         self.assertIsNotNone(spec)
@@ -121,7 +121,12 @@ class RepositoryArtifactTests(unittest.TestCase):
         spec.loader.exec_module(builder)
 
         self.assertIn("never return only one, two, or three", builder.MAIN_INSTRUCTIONS)
-        self.assertIn("missing image descriptors", builder.VALIDATOR_LUA)
+        self.assertNotIn("missing image descriptors", builder.VALIDATOR_LUA)
+        self.assertIn("imageCount == 0", builder.VALIDATOR_LUA)
+        self.assertIn("completeResponseImageCount", builder.GENERATOR_LUA)
+        self.assertIn("Create exactly one additional", builder.GENERATOR_LUA)
+        self.assertIn("pcall(axLLM, triggerId, prompt", builder.GENERATOR_LUA)
+        self.assertIn("fallbackDescriptor", builder.GENERATOR_LUA)
         self.assertIn("validateResponseImageCount", builder.GENERATOR_LUA)
         self.assertIn("자동(4~6) 설정은 최소 4장", builder.GENERATOR_LUA)
 
@@ -132,6 +137,7 @@ class RepositoryArtifactTests(unittest.TestCase):
             for entry in card["data"]["character_book"]["entries"]
         }
         on_output = entries["lb-xnai.lb.onOutput"]
+        self.assertIn("gen.completeResponseImageCount", on_output)
         self.assertIn("gen.validateResponseImageCount(tid, response)", on_output)
         self.assertIn("설정한 이미지 장수와 맞지 않습니다", on_output)
         self.assertIn("return fullChatContent, '<lb-lazy", on_output)
@@ -235,13 +241,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_4410_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_4411_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.10")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.11")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]

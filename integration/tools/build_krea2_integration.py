@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.10"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.11"
 LIGHTBOARD_BACKEND_NAME = "🔦라이트보드 - 3.4.0.1 Krea2"
 XNAI_DEFAULT_VALIDATION_RETRIES = 2
 
@@ -249,8 +249,6 @@ local function validateDescriptor(desc, label, requireSlot, structuralErrors, re
     local value = trimText(desc[field])
     if value == '' then
       table.insert(repairFields, label .. '.' .. field .. ': missing; write at least ' .. tostring(minimum) .. ' words.')
-    elseif wordCount(value) < minimum then
-      table.insert(repairFields, label .. '.' .. field .. ': received ' .. tostring(wordCount(value)) .. ' words; rewrite it with at least ' .. tostring(minimum) .. ' words.')
     end
   end
 
@@ -258,9 +256,9 @@ local function validateDescriptor(desc, label, requireSlot, structuralErrors, re
     table.insert(structuralErrors, label .. ' uses the obsolete nested characters field.')
   end
 
-  if requireSlot and type(desc.slot) ~= 'number' then
-    table.insert(structuralErrors, label .. ' has an invalid slot field.')
-  end
+  -- Missing or string-valued slots are normalized by the output hook. Keeping
+  -- them out of the full-response retry path prevents a weak model from
+  -- replacing an otherwise usable descriptor with a worse response.
 end
 
 local function main(triggerId, output)
@@ -285,25 +283,19 @@ local function main(triggerId, output)
 
   local imageCount = #scenes + (response.keyvis and 1 or 0)
   local minimumImages, maximumImages = resolveImageCountRule(triggerId)
-  if imageCount < minimumImages or imageCount > maximumImages then
+  if imageCount == 0 or imageCount > maximumImages then
     if minimumImages == maximumImages then
       table.insert(structuralErrors, 'The response must contain exactly ' .. tostring(minimumImages) .. ' images including keyvis; received ' .. tostring(imageCount) .. '.')
     else
       table.insert(structuralErrors, 'The response must describe between ' .. tostring(minimumImages) .. ' and ' .. tostring(maximumImages) .. ' images; received ' .. tostring(imageCount) .. '.')
     end
-    if imageCount < minimumImages then
-      table.insert(structuralErrors, 'Add ' .. tostring(minimumImages - imageCount) .. ' missing image descriptors to the complete response. Preserve every existing valid descriptor, then return at least ' .. tostring(minimumImages) .. ' and no more than ' .. tostring(maximumImages) .. ' total images including keyvis.')
-    elseif imageCount > maximumImages then
+    if imageCount > maximumImages then
       table.insert(structuralErrors, 'Remove ' .. tostring(imageCount - maximumImages) .. ' excess image descriptors while preserving the strongest valid moments. Return no more than ' .. tostring(maximumImages) .. ' total images including keyvis.')
     end
   end
 
-  local keyVisualPolicy = resolveKeyVisualPolicy(triggerId)
-  if keyVisualPolicy == 'required' and not response.keyvis then
-    table.insert(structuralErrors, 'The response must include a key visual.')
-  elseif keyVisualPolicy == 'disabled' and response.keyvis then
-    table.insert(structuralErrors, 'The response must not include a key visual.')
-  end
+  -- Key-visual policy is normalized by completeResponseImageCount before any
+  -- image request, so it does not need another full-response rewrite here.
 
   for index, descriptor in ipairs(scenes) do
     validateDescriptor(descriptor, 'Scene ' .. tostring(index - 1), true, structuralErrors, repairFields)
@@ -448,6 +440,211 @@ local function validateResponseImageCount(triggerId, response)
     return false, '정확히 ' .. tostring(minimumImages) .. '장이 필요하지만 ' .. tostring(imageCount) .. '장만 반환되었습니다.'
   end
   return false, '자동(4~6) 설정은 최소 4장이 필요하지만 ' .. tostring(imageCount) .. '장만 반환되었습니다.'
+end
+
+local function resolveImageCountTarget(triggerId)
+  local raw = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.imageCount'))
+  local exact = tonumber(raw)
+  if exact and exact % 1 == 0 and exact >= 1 and exact <= 6 then
+    return exact
+  end
+  return 4
+end
+
+local function cloneValue(value)
+  if type(value) ~= 'table' then return value end
+  local copied = {}
+  for key, item in pairs(value) do copied[key] = cloneValue(item) end
+  return copied
+end
+
+local requiredDescriptorFields = {
+  'appearance', 'outfit', 'background', 'composition', 'details',
+}
+
+local function descriptorReady(desc)
+  if type(desc) ~= 'table' or trimText(desc.name) == '' then return false end
+  local characterCount = tonumber(desc.character_count)
+  if not characterCount or characterCount < 1 or characterCount > 3 then return false end
+  if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then return false end
+  for _, field in ipairs(requiredDescriptorFields) do
+    if trimText(desc[field]) == '' then return false end
+  end
+  return true
+end
+
+local function descriptorSummary(response)
+  local lines = {}
+  if response.keyvis then
+    table.insert(lines, 'Key visual: ' .. trimText(response.keyvis.name) .. ' — ' .. trimText(response.keyvis.composition))
+  end
+  for index, scene in ipairs(response.scenes or {}) do
+    table.insert(lines, 'Scene ' .. tostring(index) .. ': ' .. trimText(scene.name) .. ' — ' .. trimText(scene.composition))
+  end
+  return table.concat(lines, '\n')
+end
+
+local function decodeSingleDescriptor(raw, wantKeyVisual)
+  if type(raw) ~= 'string' or trimText(raw) == '' then return nil end
+  local cleaned = raw:gsub('```[^\n]*\n?', '')
+  if not cleaned:find('</lb%-xnai>') then cleaned = cleaned .. '\n</lb-xnai>' end
+  local nodes = prelude.queryNodes('lb-xnai', cleaned)
+  if #nodes == 0 then return nil end
+  local ok, decoded = pcall(prelude.toon.decode, nodes[#nodes].content)
+  if not ok or type(decoded) ~= 'table' then return nil end
+  if wantKeyVisual and type(decoded.keyvis) == 'table' then return decoded.keyvis end
+  if type(decoded.scenes) == 'table' and type(decoded.scenes[1]) == 'table' then
+    return decoded.scenes[1]
+  end
+  if type(decoded.keyvis) == 'table' then return decoded.keyvis end
+  return nil
+end
+
+local function requestOneDescriptor(triggerId, response, fullChatContent, wantKeyVisual)
+  local story = trimText(prelude.removeAllNodes(fullChatContent or ''))
+  if #story > 14000 then story = story:sub(#story - 13999) end
+  local profileBook = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
+  local profiles = profileBook and trimText(profileBook.content) or ''
+  local extraRegistry = trimText(getChatVar(triggerId, 'lb-xnai-extra-registry-prompt'))
+  local outputShape
+  if wantKeyVisual then
+    outputShape = [[keyvis:
+  name: ...
+  character_count: 1
+  identities[n]:
+    - identity_key: ...
+      name: ...
+      source: lorebook
+      appearance: ...
+  appearance: ...
+  outfit: ...
+  background: ...
+  composition: ...
+  details: ...]]
+  else
+    outputShape = [[scenes[1]:
+  - name: ...
+    character_count: 1
+    identities[n]:
+      - identity_key: ...
+        name: ...
+        source: lorebook
+        appearance: ...
+    appearance: ...
+    outfit: ...
+    background: ...
+    composition: ...
+    details: ...
+    slot: 0]]
+  end
+  local kind = wantKeyVisual and 'key visual' or 'scene'
+  local instruction = table.concat({
+    'Create exactly one additional Krea2 ' .. kind .. ' descriptor for the story below.',
+    'Do not repeat any existing moment. Select a visibly different meaningful action, interaction, camera distance, or later story beat.',
+    'Return one <lb-xnai> block only, using exactly this TOON shape:',
+    '<lb-xnai>', outputShape, '</lb-xnai>',
+    'Every descriptor must include one to three identities and five non-empty detailed English prose fields.',
+    'Existing selected moments:', descriptorSummary(response),
+    'Canonical character appearances:', profiles,
+    'Previously established temporary extras:', extraRegistry,
+    'Story:', story,
+  }, '\n\n')
+  local prompt = {
+    { role = 'system', content = 'You create one missing structured image descriptor at a time. Output only the requested data.' },
+    { role = 'user', content = instruction },
+  }
+  local ok, llmResponse = pcall(axLLM, triggerId, prompt, false, { streaming = false })
+  if not ok or type(llmResponse) ~= 'table' or not llmResponse.success then return nil end
+  return decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
+end
+
+local fallbackVariations = {
+  'Use a wider environmental framing that clearly shows spatial relationships and the full interaction.',
+  'Use a medium two-thirds view from a contrasting side angle, preserving the action while changing visual emphasis.',
+  'Use a closer reaction-focused framing with foreground depth and a clearly different gaze or gesture emphasis.',
+  'Use an over-the-shoulder or layered depth composition that reveals the opposing participant or important story object.',
+  'Use a low or elevated establishing angle that remains faithful to the same location and narrative continuity.',
+}
+
+local function fallbackDescriptor(base, ordinal)
+  if not descriptorReady(base) then return nil end
+  local copy = cloneValue(base)
+  local variation = fallbackVariations[((ordinal - 1) % #fallbackVariations) + 1]
+  copy.composition = trimText(copy.composition) .. ' ' .. variation
+  copy.details = trimText(copy.details) .. ' This fallback shot must remain visually distinct from the other selected images while preserving identity, clothing, location, and story continuity.'
+  return copy
+end
+
+local function assignSceneSlots(response, fullChatContent)
+  local slotLimit = 1
+  for _ in trimText(fullChatContent):gmatch('\n\n+') do slotLimit = slotLimit + 1 end
+  local used = {}
+  local function nextSlot(preferred)
+    local numeric = tonumber(preferred)
+    if numeric and numeric % 1 == 0 and numeric >= 0 and numeric < slotLimit and not used[numeric] then
+      used[numeric] = true
+      return numeric
+    end
+    for candidate = 0, slotLimit - 1 do
+      if not used[candidate] then
+        used[candidate] = true
+        return candidate
+      end
+    end
+    local candidate = 0
+    while used[candidate] do candidate = candidate + 1 end
+    used[candidate] = true
+    return candidate
+  end
+  for _, scene in ipairs(response.scenes or {}) do
+    scene.slot = nextSlot(scene.slot)
+  end
+end
+
+local function completeResponseImageCount(triggerId, response, fullChatContent)
+  response.scenes = type(response.scenes) == 'table' and response.scenes or {}
+  local keyVisualPolicy = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
+  if keyVisualPolicy == '2' or keyVisualPolicy == '사용 안 함' then
+    if #response.scenes == 0 and type(response.keyvis) == 'table' then
+      response.keyvis.slot = 0
+      table.insert(response.scenes, response.keyvis)
+    end
+    response.keyvis = nil
+  end
+
+  local base = response.scenes[1] or response.keyvis
+  if not descriptorReady(base) then
+    return error('완성 가능한 기본 이미지 설명이 없습니다.')
+  end
+
+  if (keyVisualPolicy == '1' or keyVisualPolicy == '항상 포함') and not response.keyvis then
+    local keyVisual = requestOneDescriptor(triggerId, response, fullChatContent, true)
+    if not descriptorReady(keyVisual) then keyVisual = fallbackDescriptor(base, 1) end
+    if keyVisual then
+      keyVisual.slot = nil
+      response.keyvis = keyVisual
+    end
+  end
+
+  local target = resolveImageCountTarget(triggerId)
+  local imageCount = #response.scenes + (response.keyvis and 1 or 0)
+  while imageCount < target do
+    local ordinal = imageCount + 1
+    local candidate = requestOneDescriptor(triggerId, response, fullChatContent, false)
+    if not descriptorReady(candidate) then candidate = fallbackDescriptor(base, ordinal) end
+    if not candidate or not descriptorReady(candidate) then
+      return error('누락된 이미지 설명 ' .. tostring(ordinal) .. '을 생성하지 못했습니다.')
+    end
+    table.insert(response.scenes, candidate)
+    imageCount = imageCount + 1
+  end
+
+  while imageCount > target and #response.scenes > 0 do
+    table.remove(response.scenes)
+    imageCount = imageCount - 1
+  end
+  assignSceneSlots(response, fullChatContent)
+  return response
 end
 
 local function buildPresetPrompt(triggerId, desc)
@@ -601,6 +798,7 @@ return {
   persistStateAndHistory = persistStateAndHistory,
   updateExtraRegistry = updateExtraRegistry,
   validateResponseImageCount = validateResponseImageCount,
+  completeResponseImageCount = completeResponseImageCount,
 }
 """
 
@@ -781,7 +979,12 @@ def _upgrade_on_output_lua(content: str) -> str:
     count_anchor = """    gen.updateExtraRegistry(tid, response)
 
     ---@type XNAIStackItem"""
-    count_replacement = """    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
+    count_replacement = """    local completionOk, completionResult = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
+    if not completionOk or not completionResult then
+      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 부족한 이미지 설명을 추가하지 못했습니다. ' .. tostring(completionResult) .. '</lb-lazy>'
+    end
+    response = completionResult
+    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
     if not imageCountValid then
       return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
     end
@@ -864,7 +1067,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.10-krea2"
+        data["character_version"] = "4.4.11-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
@@ -974,7 +1177,7 @@ def _build_legacy_module(
     if not _as_list(module.get("regex", []), "legacy regexes"):
         raise ValueError("Legacy module has no regex scripts")
 
-    module["name"] = f"{MODULE_NAME} Module"
+    module["name"] = MODULE_NAME
     module["description"] = f"Module for {MODULE_NAME}"
     module["lorebook"] = filtered_lorebook
     module["assets"] = []
