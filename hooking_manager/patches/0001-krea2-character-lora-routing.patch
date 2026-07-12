@@ -592,10 +592,10 @@ index 02bcd3d..1f259e6 100644
  
 diff --git a/modes/krea2_character_lora.py b/modes/krea2_character_lora.py
 new file mode 100644
-index 0000000..2d7f803
+index 0000000..7c9743b
 --- /dev/null
 +++ b/modes/krea2_character_lora.py
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,408 @@
 +"""Krea2 character LoRA catalog, persistence, and per-request routing."""
 +
 +from __future__ import annotations
@@ -612,6 +612,10 @@ index 0000000..2d7f803
 +DYNAMIC_LORA_NODE_TITLE = "Krea2 캐릭터 LoRA (동적)"
 +CHARACTER_MARKER_PATTERN = re.compile(
 +    r"^\s*\[\[KREA2_CHARACTER:([^\]\r\n]{1,120})\]\]\s*",
++    re.IGNORECASE,
++)
++MULTI_CHARACTER_MARKER_PATTERN = re.compile(
++    r"^\s*\[\[KREA2_MULTI_CHARACTER\]\]\s*",
 +    re.IGNORECASE,
 +)
 +
@@ -905,6 +909,9 @@ index 0000000..2d7f803
 +def extract_character_marker(prompt: str) -> tuple[str, str | None]:
 +    """Remove a leading module routing marker and return its character name."""
 +
++    multi_match = MULTI_CHARACTER_MARKER_PATTERN.match(prompt)
++    if multi_match is not None:
++        return prompt[multi_match.end() :].strip(), None
 +    match = CHARACTER_MARKER_PATTERN.match(prompt)
 +    if match is None:
 +        return prompt, None
@@ -1242,10 +1249,10 @@ index 4990ce6..23d771f 100644
  # 워크플로우 능력 테스트 API
 diff --git a/tests/test_krea2_character_lora.py b/tests/test_krea2_character_lora.py
 new file mode 100644
-index 0000000..88be79a
+index 0000000..b6a6d9c
 --- /dev/null
 +++ b/tests/test_krea2_character_lora.py
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,317 @@
 +"""Tests for Krea2 character-specific LoRA routing."""
 +
 +from __future__ import annotations
@@ -1494,6 +1501,18 @@ index 0000000..88be79a
 +
 +        self.assertEqual(character_name, "Takahashi Kurumi")
 +        self.assertEqual(cleaned, "A detailed portrait.")
++
++    def test_multi_character_marker_is_removed_and_disables_character_lora(self) -> None:
++        module = load_module()
++        prompt = "[[KREA2_MULTI_CHARACTER]]\n\nTwo characters face each other."
++
++        cleaned, character_name = module.extract_character_marker(prompt)
++        routed = module.route_character_lora(sample_api_workflow(), None)
++
++        self.assertEqual(cleaned, "Two characters face each other.")
++        self.assertIsNone(character_name)
++        self.assertNotIn("297", routed)
++        self.assertEqual(routed["204"]["inputs"]["model"], ["206", 0])
 +
 +    def test_exact_normalized_english_name_matches_and_blank_or_other_name_does_not(self) -> None:
 +        module = load_module()

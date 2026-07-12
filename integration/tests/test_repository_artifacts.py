@@ -23,15 +23,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.1 module artifact."""
+    """Return the single published Krea2 4.4.2 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.1" in path.name
+        if "Krea2 4.4.2" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.1 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.2 module, found {matches}")
     return matches[0]
 
 
@@ -57,13 +57,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_441_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_442_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.1")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.2")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -75,10 +75,23 @@ class RepositoryArtifactTests(unittest.TestCase):
             "natural optical depth of field, {details}",
         )
         self.assertIn("[[KREA2_CHARACTER:", entries["lb-xnai.gen"])
+        self.assertIn("[[KREA2_MULTI_CHARACTER]]", entries["lb-xnai.gen"])
+        self.assertIn("character_count", entries["lb-xnai.lb.onValidate"])
+        self.assertIn("one to three identifiable characters", entries["lb-xnai.lb"].lower())
+        self.assertIn("dialogue, eye contact, touch, confrontation", entries["lb-xnai.lb"].lower())
+        self.assertIn("undeclared identifiable person beyond `character_count`", entries["lb-xnai.lb"])
+        self.assertNotIn("or another identifiable person", entries["lb-xnai.lb"])
         self.assertNotIn("ensurePhotorealistic", entries["lb-xnai.gen"])
         self.assertNotIn("details must explicitly include photorealistic", entries["lb-xnai.lb.onValidate"].lower())
         self.assertIn("negative = ''", entries["lb-xnai.gen"])
-        for field in ("appearance:", "outfit:", "background:", "composition:", "details:"):
+        for field in (
+            "character_count:",
+            "appearance:",
+            "outfit:",
+            "background:",
+            "composition:",
+            "details:",
+        ):
             self.assertIn(field, entries["lb-xnai.lb.format"])
         self.assertIn(
             "=🌠삽화=group",
@@ -127,6 +140,7 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("load_workflow_resolution", patch)
         self.assertIn('id="krea2-resolution-width"', patch)
         self.assertIn('id="krea2-resolution-height"', patch)
+        self.assertIn("KREA2_MULTI_CHARACTER", patch)
 
 
 if __name__ == "__main__":
