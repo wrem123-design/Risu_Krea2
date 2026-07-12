@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.12"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4412"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.13"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4413"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -450,24 +450,78 @@ local function resolveImageCountTarget(triggerId)
   return 4
 end
 
-local function cloneValue(value)
-  if type(value) ~= 'table' then return value end
-  local copied = {}
-  for key, item in pairs(value) do copied[key] = cloneValue(item) end
-  return copied
-end
-
 local requiredDescriptorFields = {
   'appearance', 'outfit', 'background', 'composition', 'details',
 }
 
+local function normalizeDescriptorShape(desc)
+  if type(desc) ~= 'table' then return nil end
+  local identities = desc.identities
+  if type(identities) == 'table' and trimText(identities.identity_key) ~= '' then
+    identities = { identities }
+  elseif type(identities) == 'table' then
+    local normalized = {}
+    for _, identity in pairs(identities) do
+      if type(identity) == 'table' then table.insert(normalized, identity) end
+    end
+    identities = normalized
+  else
+    identities = {}
+  end
+  desc.identities = identities
+  local characterCount = tonumber(desc.character_count)
+  if not characterCount or characterCount < 1 or characterCount > 3 then
+    characterCount = #identities
+  end
+  desc.character_count = characterCount
+  if trimText(desc.name) == '' and identities[1] then
+    desc.name = trimText(identities[1].name)
+  end
+  return desc
+end
+
 local function descriptorReady(desc)
+  desc = normalizeDescriptorShape(desc)
   if type(desc) ~= 'table' or trimText(desc.name) == '' then return false end
   local characterCount = tonumber(desc.character_count)
   if not characterCount or characterCount < 1 or characterCount > 3 then return false end
   if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then return false end
   for _, field in ipairs(requiredDescriptorFields) do
     if trimText(desc[field]) == '' then return false end
+  end
+  return true
+end
+
+local function sanitizeResponseDescriptors(response)
+  response = type(response) == 'table' and response or {}
+  local cleanScenes = {}
+  if type(response.scenes) == 'table' then
+    for _, scene in pairs(response.scenes) do
+      scene = normalizeDescriptorShape(scene)
+      if descriptorReady(scene) then table.insert(cleanScenes, scene) end
+    end
+  end
+  response.scenes = cleanScenes
+  response.keyvis = normalizeDescriptorShape(response.keyvis)
+  if not descriptorReady(response.keyvis) then response.keyvis = nil end
+  return response
+end
+
+local function descriptorSignature(desc)
+  if not descriptorReady(desc) then return '' end
+  return table.concat({
+    trimText(desc.outfit):lower(),
+    trimText(desc.background):lower(),
+    trimText(desc.composition):lower(),
+  }, '\n')
+end
+
+local function descriptorIsDistinct(candidate, response)
+  local signature = descriptorSignature(candidate)
+  if signature == '' then return false end
+  if response.keyvis and descriptorSignature(response.keyvis) == signature then return false end
+  for _, scene in ipairs(response.scenes or {}) do
+    if descriptorSignature(scene) == signature then return false end
   end
   return true
 end
@@ -491,11 +545,19 @@ local function decodeSingleDescriptor(raw, wantKeyVisual)
   if #nodes == 0 then return nil end
   local ok, decoded = pcall(prelude.toon.decode, nodes[#nodes].content)
   if not ok or type(decoded) ~= 'table' then return nil end
-  if wantKeyVisual and type(decoded.keyvis) == 'table' then return decoded.keyvis end
-  if type(decoded.scenes) == 'table' and type(decoded.scenes[1]) == 'table' then
-    return decoded.scenes[1]
+  if wantKeyVisual and type(decoded.keyvis) == 'table' then
+    return normalizeDescriptorShape(decoded.keyvis)
   end
-  if type(decoded.keyvis) == 'table' then return decoded.keyvis end
+  if descriptorReady(decoded) then return normalizeDescriptorShape(decoded) end
+  if type(decoded.scenes) == 'table' then
+    if type(decoded.scenes[1]) == 'table' then
+      return normalizeDescriptorShape(decoded.scenes[1])
+    end
+    for _, scene in pairs(decoded.scenes) do
+      if type(scene) == 'table' then return normalizeDescriptorShape(scene) end
+    end
+  end
+  if type(decoded.keyvis) == 'table' then return normalizeDescriptorShape(decoded.keyvis) end
   return nil
 end
 
@@ -548,30 +610,24 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     'Previously established temporary extras:', extraRegistry,
     'Story:', story,
   }, '\n\n')
-  local prompt = {
-    { role = 'system', content = 'You create one missing structured image descriptor at a time. Output only the requested data.' },
-    { role = 'user', content = instruction },
-  }
-  local ok, llmResponse = pcall(axLLM, triggerId, prompt, false, { streaming = false })
-  if not ok or type(llmResponse) ~= 'table' or not llmResponse.success then return nil end
-  return decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
-end
-
-local fallbackVariations = {
-  'Use a wider environmental framing that clearly shows spatial relationships and the full interaction.',
-  'Use a medium two-thirds view from a contrasting side angle, preserving the action while changing visual emphasis.',
-  'Use a closer reaction-focused framing with foreground depth and a clearly different gaze or gesture emphasis.',
-  'Use an over-the-shoulder or layered depth composition that reveals the opposing participant or important story object.',
-  'Use a low or elevated establishing angle that remains faithful to the same location and narrative continuity.',
-}
-
-local function fallbackDescriptor(base, ordinal)
-  if not descriptorReady(base) then return nil end
-  local copy = cloneValue(base)
-  local variation = fallbackVariations[((ordinal - 1) % #fallbackVariations) + 1]
-  copy.composition = trimText(copy.composition) .. ' ' .. variation
-  copy.details = trimText(copy.details) .. ' This fallback shot must remain visually distinct from the other selected images while preserving identity, clothing, location, and story continuity.'
-  return copy
+  for attempt = 1, 2 do
+    local retryNote = ''
+    if attempt == 2 then
+      retryNote = '\n\nThe previous answer was malformed, incomplete, or duplicated an existing shot. Rewrite all five prose fields and choose a genuinely different story moment.'
+    end
+    local prompt = {
+      { role = 'system', content = 'You create one missing structured image descriptor at a time. Output only the requested data.' },
+      { role = 'user', content = instruction .. retryNote },
+    }
+    local ok, llmResponse = pcall(axLLM, triggerId, prompt, false, { streaming = false })
+    if ok and type(llmResponse) == 'table' and llmResponse.success then
+      local candidate = decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
+      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) then
+        return candidate
+      end
+    end
+  end
+  return nil
 end
 
 local function assignSceneSlots(response, fullChatContent)
@@ -601,28 +657,27 @@ local function assignSceneSlots(response, fullChatContent)
 end
 
 local function completeResponseImageCount(triggerId, response, fullChatContent)
-  response.scenes = type(response.scenes) == 'table' and response.scenes or {}
+  response = sanitizeResponseDescriptors(response)
   local keyVisualPolicy = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
   if keyVisualPolicy == '2' or keyVisualPolicy == '사용 안 함' then
-    if #response.scenes == 0 and type(response.keyvis) == 'table' then
-      response.keyvis.slot = 0
+    if type(response.keyvis) == 'table' then
+      response.keyvis.slot = nil
       table.insert(response.scenes, response.keyvis)
     end
     response.keyvis = nil
   end
 
-  local base = response.scenes[1] or response.keyvis
-  if not descriptorReady(base) then
+  if not descriptorReady(response.scenes[1] or response.keyvis) then
     return error('완성 가능한 기본 이미지 설명이 없습니다.')
   end
 
   if (keyVisualPolicy == '1' or keyVisualPolicy == '항상 포함') and not response.keyvis then
     local keyVisual = requestOneDescriptor(triggerId, response, fullChatContent, true)
-    if not descriptorReady(keyVisual) then keyVisual = fallbackDescriptor(base, 1) end
-    if keyVisual then
-      keyVisual.slot = nil
-      response.keyvis = keyVisual
+    if not descriptorReady(keyVisual) then
+      return error('누락된 키비주얼 설명을 두 번 재작성했지만 생성하지 못했습니다.')
     end
+    keyVisual.slot = nil
+    response.keyvis = keyVisual
   end
 
   local target = resolveImageCountTarget(triggerId)
@@ -630,9 +685,8 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
   while imageCount < target do
     local ordinal = imageCount + 1
     local candidate = requestOneDescriptor(triggerId, response, fullChatContent, false)
-    if not descriptorReady(candidate) then candidate = fallbackDescriptor(base, ordinal) end
     if not candidate or not descriptorReady(candidate) then
-      return error('누락된 이미지 설명 ' .. tostring(ordinal) .. '을 생성하지 못했습니다.')
+      return error('누락된 이미지 설명 ' .. tostring(ordinal) .. '을 두 번 재작성했지만 생성하지 못했습니다.')
     end
     table.insert(response.scenes, candidate)
     imageCount = imageCount + 1
@@ -798,6 +852,8 @@ return {
   updateExtraRegistry = updateExtraRegistry,
   validateResponseImageCount = validateResponseImageCount,
   completeResponseImageCount = completeResponseImageCount,
+  normalizeDescriptorShape = normalizeDescriptorShape,
+  sanitizeResponseDescriptors = sanitizeResponseDescriptors,
 }
 """
 
@@ -928,64 +984,10 @@ def _upgrade_on_output_lua(content: str) -> str:
     """Apply key-visual policy and placement to the inherited output hook."""
 
     runtime_guard = r"""
-local outputFallbackVariations = {
-  'Use a wider environmental framing that clearly shows spatial relationships and the full interaction.',
-  'Use a medium two-thirds view from a contrasting side angle, preserving the action while changing visual emphasis.',
-  'Use a closer reaction-focused framing with foreground depth and a clearly different gaze or gesture emphasis.',
-  'Use an over-the-shoulder or layered depth composition that reveals the opposing participant or important story object.',
-  'Use a low or elevated establishing angle that remains faithful to the same location and narrative continuity.',
-}
-
-local function cloneOutputValue(value)
-  if type(value) ~= 'table' then return value end
-  local copied = {}
-  for key, item in pairs(value) do copied[key] = cloneOutputValue(item) end
-  return copied
-end
-
--- Final cache-safe guard. This deliberately lives in onOutput instead of only
--- in lb-xnai.gen, because PocketRisu can retain an older imported lorebook
--- function for the lifetime of an already-open browser session.
-local function completeResponseAtOutputBoundary(tid, response)
-  response.scenes = type(response.scenes) == 'table' and response.scenes or {}
-  local current = #response.scenes + (response.keyvis and 1 or 0)
-  local raw = tostring(getGlobalVar(tid, 'toggle_lb-xnai.imageCount') or '')
-  local exact = tonumber(raw)
-  local target
-  if exact and exact % 1 == 0 and exact >= 1 and exact <= 6 then
-    target = exact
-  else
-    target = math.max(4, math.min(6, current))
-  end
-
-  local base = response.scenes[1] or response.keyvis
-  while current < target and type(base) == 'table' do
-    local ordinal = current + 1
-    local copy = cloneOutputValue(base)
-    local variation = outputFallbackVariations[((ordinal - 1) % #outputFallbackVariations) + 1]
-    copy.composition = tostring(copy.composition or '') .. ' ' .. variation
-    copy.details = tostring(copy.details or '') .. ' Keep this shot visually distinct while preserving identity, clothing, location, and story continuity.'
-    copy.slot = nil
-    table.insert(response.scenes, copy)
-    current = current + 1
-  end
-
-  while exact and current > target and #response.scenes > 0 do
-    table.remove(response.scenes)
-    current = current - 1
-  end
-
-  local used = {}
-  for index, scene in ipairs(response.scenes) do
-    local slot = tonumber(scene.slot)
-    if not slot or slot % 1 ~= 0 or slot < 0 or used[slot] then
-      slot = index - 1
-      while used[slot] do slot = slot + 1 end
-    end
-    used[slot] = true
-    scene.slot = slot
-  end
-  return response
+-- Final cache-safe shape guard. Count completion and retrying remain in the
+-- versioned generator; this boundary never manufactures cloned scenes.
+local function completeResponseAtOutputBoundary(gen, response)
+  return gen.sanitizeResponseDescriptors(response)
 end
 """
     main_anchor = "---@param tid string\n---@param output string"
@@ -997,9 +999,17 @@ end
     policy_anchor = """    ---@type XNAIStackItem
     local stackItem = {"""
     policy_replacement = """    local keyVisualPolicy = getGlobalVar(tid, 'toggle_lb-xnai.keyVisual') or '0'
-    if keyVisualPolicy == '2' then
-      response.keyvis = nil
+    response = gen.sanitizeResponseDescriptors(response)
+    local completionOk, completionResult = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
+    if not completionOk or not completionResult then
+      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 누락되거나 중복된 이미지 설명을 재작성하지 못했습니다. ' .. tostring(completionResult or '') .. '</lb-lazy>'
     end
+    response = completeResponseAtOutputBoundary(gen, completionResult)
+    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
+    if not imageCountValid then
+      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
+    end
+    gen.updateExtraRegistry(tid, response)
 
     ---@type XNAIStackItem
     local stackItem = {"""
@@ -1027,40 +1037,6 @@ end
             raise ValueError("Source module output hook has an unsupported layout")
         content = content.replace(policy_anchor, policy_replacement, 1)
         content = content.replace(placement_anchor, placement_replacement, 1)
-    memory_anchor = """    if keyVisualPolicy == '2' then
-      response.keyvis = nil
-    end
-
-    ---@type XNAIStackItem"""
-    memory_replacement = """    if keyVisualPolicy == '2' then
-      response.keyvis = nil
-    end
-    gen.updateExtraRegistry(tid, response)
-
-    ---@type XNAIStackItem"""
-    if "gen.updateExtraRegistry(tid, response)" not in content:
-        if memory_anchor not in content:
-            raise ValueError("Source module output hook cannot attach extra memory")
-        content = content.replace(memory_anchor, memory_replacement, 1)
-    count_anchor = """    gen.updateExtraRegistry(tid, response)
-
-    ---@type XNAIStackItem"""
-    count_replacement = """    local completionOk, completionResult = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
-    if completionOk and completionResult then
-      response = completionResult
-    end
-    response = completeResponseAtOutputBoundary(tid, response)
-    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
-    if not imageCountValid then
-      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
-    end
-    gen.updateExtraRegistry(tid, response)
-
-    ---@type XNAIStackItem"""
-    if "gen.validateResponseImageCount(tid, response)" not in content:
-        if count_anchor not in content:
-            raise ValueError("Source module output hook cannot enforce image count")
-        content = content.replace(count_anchor, count_replacement, 1)
     content = content.replace(
         "prelude.import(tid, 'lb-xnai.gen')",
         f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
@@ -1113,6 +1089,9 @@ end
       '; generated=' .. tostring(generatedCount) ..
       '; failed=' .. tostring(failedCount) ..
       '; firstFailure=' .. firstFailure)
+    if failedCount > 0 then
+      return fullChatContent, '<lb-lazy id="lb-xnai">오류: ' .. tostring(plannedCount) .. '장 중 ' .. tostring(failedCount) .. '장의 ComfyUI 생성에 실패했습니다. ' .. firstFailure .. '</lb-lazy>'
+    end
     table.insert(xnaiState, stackItem)
     xnaiState = select(1, gen.persistStateAndHistory(tid, xnaiState))"""
     if "lb-xnai-last-generation-debug" not in content:
@@ -1232,7 +1211,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.12-krea2"
+        data["character_version"] = "4.4.13-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
