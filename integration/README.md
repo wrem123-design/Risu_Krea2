@@ -18,7 +18,7 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.5.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.6.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -29,12 +29,15 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
    bot's fixed English appearance profiles. Character-specific profile data is
    intentionally not stored in this public repository.
 
-The module creates four to six image descriptions per response. Each description
+The module defaults to four to six image descriptions per response. Its menu can
+instead require an exact total from one through six. The same count is injected
+into the auxiliary-model instructions and enforced by the validator, and an
+optional key visual counts toward that total. Each description
 is assembled into five English natural-language paragraphs: appearance, outfit,
 background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words, and the module rejects missing
 or underspecified paragraphs before requesting an image.
-Version 4.4.5 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.6 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's canonical English name as an internal routing marker, and Hooking
@@ -46,16 +49,20 @@ The validator still requests targeted rewrites for prose below the documented
 minimums. If a backend reports validation complete with slightly short but
 non-empty prose, the final generator now degrades gracefully instead of blocking
 the image request with a duplicate word-count gate.
-Only `프리셋 1` is included. It assembles `{appearance}`, `{outfit}`, `{background}`,
+`프리셋 1` assembles `{appearance}`, `{outfit}`, `{background}`,
 `{composition}`, and `{details}` as five paragraphs. Its fifth paragraph prefixes
 `{details}` with the fixed smartphone and photorealistic style. Module generation
 rules keep `{details}` style-neutral, so another preset can later replace only the
 style prefix to produce 2D or another rendering medium. The preset remains
 positive-only and does not require a `[Negative]` section.
 
-The module menu retains only settings that are read by active Lua or legacy
-post-processing: prompt activation, image activation, preset number, key-visual
-position, and saved-history count. Unused NAI-era controls are removed.
+The module menu retains only settings that are read by active Lua, prompt macros,
+or legacy post-processing. `생성 장수` selects automatic 4–6 output or an exact
+1–6 total. `키비주얼` selects automatic, required, or disabled keyvis behavior.
+`장면 선택` selects balanced distribution, strongest-moment priority, or later-scene
+priority. Changes apply to the next illustration request without a restart. Prompt
+activation, image activation, preset number, key-visual position, and saved-history
+count remain available. Unused NAI-era controls are removed.
 
 ## Workflow contract
 

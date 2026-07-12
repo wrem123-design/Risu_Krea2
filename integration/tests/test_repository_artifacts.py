@@ -24,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.5 module artifact."""
+    """Return the single published Krea2 4.4.6 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.5" in path.name
+        if "Krea2 4.4.6" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.5 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.6 module, found {matches}")
     return matches[0]
 
 
@@ -78,13 +78,38 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("or appearance == ''", builder.GENERATOR_LUA)
         self.assertIn("or details == ''", builder.GENERATOR_LUA)
 
-    def test_module_is_valid_positive_only_krea2_445_archive(self) -> None:
+    def test_module_generation_controls_are_wired_to_prompt_and_validator(self) -> None:
+        """Keep output controls functional instead of exposing decorative toggles."""
+
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertIn("lb-xnai.imageCount=생성 장수=select=자동(4~6),1,2,3,4,5,6", builder.MODULE_TOGGLES)
+        self.assertIn("lb-xnai.keyVisual=키비주얼=select=자동,항상 포함,사용 안 함", builder.MODULE_TOGGLES)
+        self.assertIn(
+            "lb-xnai.sceneSelection=장면 선택=select=균형 배치,핵심 장면 우선,후반부 우선",
+            builder.MODULE_TOGGLES,
+        )
+        self.assertIn("toggle_lb-xnai.imageCount", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("toggle_lb-xnai.keyVisual", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("toggle_lb-xnai.sceneSelection", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("resolveImageCountRule", builder.VALIDATOR_LUA)
+        self.assertIn("toggle_lb-xnai.imageCount", builder.VALIDATOR_LUA)
+        self.assertIn("toggle_lb-xnai.keyVisual", builder.VALIDATOR_LUA)
+        self.assertIn("must contain exactly", builder.VALIDATOR_LUA)
+        self.assertIn("must include a key visual", builder.VALIDATOR_LUA)
+        self.assertIn("must not include a key visual", builder.VALIDATOR_LUA)
+
+    def test_module_is_valid_positive_only_krea2_446_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.5")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.6")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -141,6 +166,9 @@ class RepositoryArtifactTests(unittest.TestCase):
             {
                 "lb-xnai.lazy",
                 "lb-xnai.generation",
+                "lb-xnai.imageCount",
+                "lb-xnai.keyVisual",
+                "lb-xnai.sceneSelection",
                 "lb-xnai.preset",
                 "lb-xnai.kv.position",
                 "lb-xnai.maxSaves",
