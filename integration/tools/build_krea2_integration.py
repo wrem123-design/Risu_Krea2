@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.15"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4415"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.16"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4416"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -73,7 +73,7 @@ For every image, output `name`, `character_count`, `identities`, and five comple
 
 Use fluent descriptive sentences and paragraph-like prose, not comma-separated tag lists, weights, quality-token piles, or model-control syntax. Do not output a negative prompt. Do not mention unavailable LoRAs or identity adapters. Base poses on the story only; no source image or depth-control guidance exists.
 
-Return only the required `<lb-xnai>` TOON structure. Each scene must use a valid numeric slot that corresponds to a paragraph boundary supplied in the chat. Ensure the total number of `scenes` plus an optional `keyvis` follows the image-count setting and the keyvis presence follows the key-visual setting. Never omit or leave blank any of the five fields."""
+Return only the required `<lb-xnai>` TOON structure. Each `[Slot N]` marker is a source-story paragraph position, never an image ordinal. For every scene, copy the exact numeric N from the marker nearest the described event; do not number selected scenes sequentially as 0, 1, 2 unless those events truly occur at those first boundaries. Balanced selection should normally span early, middle, and later meaningful boundaries, strongest selection should use the exact boundaries of the strongest events, and later selection should use exact later-story boundaries. Ensure the total number of `scenes` plus an optional `keyvis` follows the image-count setting and the keyvis presence follows the key-visual setting. Never omit or leave blank any of the five fields."""
 
 JOB_INSTRUCTIONS = """Plan the requested number of richly detailed Krea2 illustrations from the supplied chat and per-bot character profiles. Follow the module's image-count, key-visual, and scene-selection settings. Use meaningful cast coverage only as a soft tie-breaker after story relevance, without inventing or promoting passive people. Each image declares one to three identifiable characters and five non-empty natural-language fields. Preserve every visible participant's fixed appearance, resolve scene-specific clothing and interaction, and return only the requested TOON structure."""
 
@@ -570,12 +570,74 @@ end
 local function resolveSceneSelectionGuidance(triggerId)
   local raw = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.sceneSelection'))
   if raw == '1' or raw == '핵심 장면 우선' then
-    return 'strongest visually consequential: choose the most important visual event first; use underrepresented meaningful characters or interactions only to break ties between similarly strong moments.'
+    return 'strongest visually consequential: choose the most important visual event first; copy its exact nearby [Slot N] marker; use underrepresented meaningful characters or interactions only to break ties between similarly strong moments.'
   end
   if raw == '2' or raw == '후반부 우선' then
-    return 'later meaningful moments: favor consequential beats nearer the end while retaining enough context; among comparable later beats, prefer underrepresented active characters or interactions.'
+    return 'later meaningful moments: favor consequential beats nearer the end while retaining enough context; copy exact later [Slot N] markers; among comparable later beats, prefer underrepresented active characters or interactions.'
   end
-  return 'balanced distribution: spread images across meaningful story boundaries and, among comparable moments, vary focal characters and visible interactions without imposing a quota.'
+  return 'balanced distribution: spread images across early, middle, and later meaningful [Slot N] boundaries and, among comparable moments, vary focal characters and visible interactions without imposing a quota.'
+end
+
+local function storySlotLimit(fullChatContent)
+  local maximum = -1
+  local slotted = insertSlots(trimText(prelude.removeAllNodes(fullChatContent or '')))
+  for marker in slotted:gmatch('%[Slot%s+(%d+)%]') do
+    local numeric = tonumber(marker)
+    if numeric and numeric > maximum then maximum = numeric end
+  end
+  return math.max(1, maximum + 1)
+end
+
+local function descriptorSlotIsAvailable(candidate, response, fullChatContent)
+  if type(candidate) ~= 'table' then return false end
+  local slot = tonumber(candidate.slot)
+  local limit = storySlotLimit(fullChatContent)
+  if not slot or slot % 1 ~= 0 or slot < 0 or slot >= limit then return false end
+  for _, scene in ipairs(response.scenes or {}) do
+    if tonumber(scene.slot) == slot then return false end
+  end
+  candidate.slot = slot
+  return true
+end
+
+local function sanitizeSceneSlots(response, fullChatContent)
+  local cleanScenes = {}
+  local used = {}
+  local limit = storySlotLimit(fullChatContent)
+  for _, scene in ipairs(response.scenes or {}) do
+    local slot = tonumber(scene.slot)
+    if slot and slot % 1 == 0 and slot >= 0 and slot < limit and not used[slot] then
+      used[slot] = true
+      scene.slot = slot
+      table.insert(cleanScenes, scene)
+    end
+  end
+  response.scenes = cleanScenes
+  return response
+end
+
+local function sceneSlotsNeedRebuild(triggerId, response, fullChatContent)
+  local raw = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.sceneSelection'))
+  if raw == '1' or raw == '핵심 장면 우선' then return false end
+  local scenes = response.scenes or {}
+  local limit = storySlotLimit(fullChatContent)
+  if #scenes < 3 or limit < 8 then return false end
+  local slots = {}
+  for _, scene in ipairs(scenes) do table.insert(slots, tonumber(scene.slot) or -1) end
+  table.sort(slots)
+  local ordinal = true
+  for index, slot in ipairs(slots) do
+    if slot ~= index - 1 then ordinal = false break end
+  end
+  if ordinal then return true end
+  local minimum = slots[1]
+  local maximum = slots[#slots]
+  if raw == '2' or raw == '후반부 우선' then
+    return maximum < math.floor(limit * 0.5)
+  end
+  return minimum >= 0
+    and maximum < math.floor(limit * 0.5)
+    and (maximum - minimum) < math.max(3, math.floor(limit * 0.25))
 end
 
 local function decodeSingleDescriptor(raw, wantKeyVisual)
@@ -604,7 +666,8 @@ end
 
 local function requestOneDescriptor(triggerId, response, fullChatContent, wantKeyVisual)
   local story = trimText(prelude.removeAllNodes(fullChatContent or ''))
-  if #story > 14000 then story = story:sub(#story - 13999) end
+  story = insertSlots(story)
+  if #story > 18000 then story = story:sub(#story - 17999) end
   local profileBook = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
   local profiles = profileBook and trimText(profileBook.content) or ''
   local extraRegistry = trimText(getChatVar(triggerId, 'lb-xnai-extra-registry-prompt'))
@@ -637,12 +700,13 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     background: ...
     composition: ...
     details: ...
-    slot: 0]]
+    slot: ...]]
   end
   local kind = wantKeyVisual and 'key visual' or 'scene'
   local instruction = table.concat({
     'Create exactly one additional Krea2 ' .. kind .. ' descriptor for the story below.',
     'Do not repeat any existing moment. Select a visibly different meaningful action, interaction, camera distance, or later story beat.',
+    'For a scene slot, copy the exact numeric N from [Slot N] nearest the described event. The slot is a source-story position, not the ordinal number of the generated image. Use an unused marker and never default to slot 0.',
     'Scene-selection policy:', resolveSceneSelectionGuidance(triggerId),
     'Story relevance remains primary. Use cast coverage only as a soft tie-breaker: when the story supports an equally meaningful moment, prefer an underrepresented named character or a visible interaction over another repetitive protagonist-only shot. Never invent or promote a passive bystander merely for diversity.',
     'Return one <lb-xnai> block only, using exactly this TOON shape:',
@@ -666,7 +730,8 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     local ok, llmResponse = pcall(axLLM, triggerId, prompt, false, { streaming = false })
     if ok and type(llmResponse) == 'table' and llmResponse.success then
       local candidate = decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
-      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) then
+      local slotReady = wantKeyVisual or descriptorSlotIsAvailable(candidate, response, fullChatContent)
+      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) and slotReady then
         return candidate
       end
     end
@@ -675,40 +740,27 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
 end
 
 local function assignSceneSlots(response, fullChatContent)
-  local slotLimit = 1
-  for _ in trimText(fullChatContent):gmatch('\n\n+') do slotLimit = slotLimit + 1 end
+  local slotLimit = storySlotLimit(fullChatContent)
   local used = {}
-  local function nextSlot(preferred)
-    local numeric = tonumber(preferred)
-    if numeric and numeric % 1 == 0 and numeric >= 0 and numeric < slotLimit and not used[numeric] then
-      used[numeric] = true
-      return numeric
-    end
-    for candidate = 0, slotLimit - 1 do
-      if not used[candidate] then
-        used[candidate] = true
-        return candidate
-      end
-    end
-    local candidate = 0
-    while used[candidate] do candidate = candidate + 1 end
-    used[candidate] = true
-    return candidate
-  end
   for _, scene in ipairs(response.scenes or {}) do
-    scene.slot = nextSlot(scene.slot)
+    local slot = tonumber(scene.slot)
+    if not slot or slot % 1 ~= 0 or slot < 0 or slot >= slotLimit or used[slot] then
+      return error('본문 위치와 일치하는 고유 장면 슬롯을 확정하지 못했습니다.')
+    end
+    used[slot] = true
+    scene.slot = slot
   end
 end
 
 local function completeResponseImageCount(triggerId, response, fullChatContent)
   response = sanitizeResponseDescriptors(response)
+  response = sanitizeSceneSlots(response, fullChatContent)
   local keyVisualPolicy = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
   if keyVisualPolicy == '2' or keyVisualPolicy == '사용 안 함' then
-    if type(response.keyvis) == 'table' then
-      response.keyvis.slot = nil
-      table.insert(response.scenes, response.keyvis)
-    end
     response.keyvis = nil
+  end
+  if sceneSlotsNeedRebuild(triggerId, response, fullChatContent) then
+    response.scenes = {}
   end
 
   if not descriptorReady(response.scenes[1] or response.keyvis) then
@@ -902,6 +954,7 @@ return {
   completeResponseImageCount = completeResponseImageCount,
   normalizeDescriptorShape = normalizeDescriptorShape,
   sanitizeResponseDescriptors = sanitizeResponseDescriptors,
+  sanitizeSceneSlots = sanitizeSceneSlots,
 }
 """
 
@@ -1259,7 +1312,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.15-krea2"
+        data["character_version"] = "4.4.16-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

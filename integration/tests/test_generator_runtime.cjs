@@ -16,25 +16,28 @@ const builder = fs.readFileSync(builderPath, 'utf8');
 const match = /GENERATOR_LUA = r"""([\s\S]*?)"""\s+def _as_object/.exec(builder);
 if (!match) throw new Error('GENERATOR_LUA not found');
 
-const descriptor = (name, outfit, background, composition) => `{
+const descriptor = (name, outfit, background, composition, slot = 0) => `{
   name = '${name}', character_count = 1,
   identities = {{ identity_key = '${name}', name = '${name}', source = 'lorebook', appearance = '${name} appearance' }},
   appearance = '${name} detailed appearance', outfit = '${outfit}',
   background = '${background}', composition = '${composition}',
-  details = '${name} distinct rendering details'
+  details = '${name} distinct rendering details', slot = ${slot}
 }`;
 
 const harness = `
 local queue = {
-  ${descriptor('Scene A duplicate', 'white shirt', 'messy dressing room', 'medium reaction shot')},
-  ${descriptor('Scene B', 'red coat', 'rainy station', 'wide departure shot')},
-  ${descriptor('Scene B duplicate', 'red coat', 'rainy station', 'wide departure shot')},
-  ${descriptor('Scene C', 'blue jacket', 'sunlit rooftop', 'low angle confrontation')}
+  ${descriptor('Scene A duplicate', 'white shirt', 'messy dressing room', 'medium reaction shot', 0)},
+  ${descriptor('Scene B', 'red coat', 'rainy station', 'wide departure shot', 1)},
+  ${descriptor('Scene B duplicate', 'red coat', 'rainy station', 'wide departure shot', 1)},
+  ${descriptor('Scene C', 'blue jacket', 'sunlit rooftop', 'low angle confrontation', 2)},
+  ${descriptor('Scene C duplicate', 'blue jacket', 'sunlit rooftop', 'low angle confrontation', 2)},
+  ${descriptor('Scene D', 'brown jacket', 'apartment hallway', 'low angle arrival shot', 3)}
 }
+local sceneSelectionValue = '1'
 function getGlobalVar(_, name)
   if name == 'toggle_lb-xnai.imageCount' then return '4' end
   if name == 'toggle_lb-xnai.keyVisual' then return '2' end
-  if name == 'toggle_lb-xnai.sceneSelection' then return '1' end
+  if name == 'toggle_lb-xnai.sceneSelection' then return sceneSelectionValue end
   return ''
 end
 function getChatVar() return '' end
@@ -60,10 +63,10 @@ local response = {
   keyvis = ${descriptor('Key Scene', 'black suit', 'underground lab', 'centered establishing shot')},
   scenes = {
     malformed,
-    ${descriptor('Scene A', 'white shirt', 'messy dressing room', 'medium reaction shot')}
+    ${descriptor('Scene A', 'white shirt', 'messy dressing room', 'medium reaction shot', 0)}
   }
 }
-local completed = gen.completeResponseImageCount('test', response, 'one\\n\\ntwo\\n\\nthree\\n\\nfour')
+local completed = gen.completeResponseImageCount('test', response, 'one\\n\\ntwo\\n\\nthree\\n\\nfour\\n\\nfive')
 assert(completed.keyvis == nil, 'disabled key visual was not converted')
 assert(#completed.scenes == 4, 'expected four valid scenes')
 for _, scene in ipairs(completed.scenes) do
@@ -71,23 +74,44 @@ for _, scene in ipairs(completed.scenes) do
   assert(scene.name ~= 'Broken', 'malformed descriptor survived sanitization')
 end
 assert(completed.scenes[1].name == 'Scene A')
-assert(completed.scenes[2].name == 'Key Scene')
-assert(completed.scenes[3].name == 'Scene B')
-assert(completed.scenes[4].name == 'Scene C')
+assert(completed.scenes[2].name == 'Scene B')
+assert(completed.scenes[3].name == 'Scene C')
+assert(completed.scenes[4].name == 'Scene D')
+assert(completed.scenes[1].slot == 0 and completed.scenes[2].slot == 1 and completed.scenes[3].slot == 2 and completed.scenes[4].slot == 3)
 
 queue = {
-  ${descriptor('Fresh A', 'gray hoodie', 'night bus stop', 'wide waiting shot')},
-  ${descriptor('Fresh B', 'green coat', 'corner store', 'medium conversation shot')},
-  ${descriptor('Fresh C', 'navy uniform', 'empty classroom', 'over shoulder reaction shot')},
-  ${descriptor('Fresh D', 'brown jacket', 'apartment hallway', 'low angle arrival shot')}
+  ${descriptor('Fresh A', 'gray hoodie', 'night bus stop', 'wide waiting shot', 0)},
+  ${descriptor('Fresh B', 'green coat', 'corner store', 'medium conversation shot', 1)},
+  ${descriptor('Fresh C', 'navy uniform', 'empty classroom', 'over shoulder reaction shot', 2)},
+  ${descriptor('Fresh D', 'brown jacket', 'apartment hallway', 'low angle arrival shot', 3)}
 }
 local recovered = gen.completeResponseImageCount('test', {
   scenes = { malformed }
-}, 'one\\n\\ntwo\\n\\nthree\\n\\nfour')
+}, 'one\\n\\ntwo\\n\\nthree\\n\\nfour\\n\\nfive')
 assert(#recovered.scenes == 4, 'an all-malformed response was not rebuilt')
 assert(recovered.scenes[1].name == 'Fresh A', 'fresh seed scene was not requested')
 assert(lastPromptText:find('strongest visually consequential', 1, true), 'scene selection policy missing from repair prompt')
 assert(lastPromptText:find('Existing cast coverage:', 1, true), 'cast coverage missing from repair prompt')
+
+sceneSelectionValue = '0'
+queue = {
+  ${descriptor('Spread A', 'black coat', 'first room', 'early establishing shot', 1)},
+  ${descriptor('Spread B', 'white coat', 'second room', 'middle interaction shot', 5)},
+  ${descriptor('Spread C', 'red coat', 'third room', 'later confrontation shot', 8)},
+  ${descriptor('Spread D', 'blue coat', 'final room', 'ending reaction shot', 10)}
+}
+local clustered = { scenes = {
+  ${descriptor('Ordinal A', 'a coat', 'room a', 'shot a', 0)},
+  ${descriptor('Ordinal B', 'b coat', 'room b', 'shot b', 1)},
+  ${descriptor('Ordinal C', 'c coat', 'room c', 'shot c', 2)},
+  ${descriptor('Ordinal D', 'd coat', 'room d', 'shot d', 3)}
+} }
+local longStory = table.concat({
+  'p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13'
+}, '\\n\\n')
+local spread = gen.completeResponseImageCount('test', clustered, longStory)
+assert(spread.scenes[1].name == 'Spread A', 'ordinal top cluster was not rebuilt')
+assert(spread.scenes[2].slot == 5 and spread.scenes[3].slot == 8 and spread.scenes[4].slot == 10)
 return true
 `;
 
@@ -99,7 +123,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.15.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.16.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));
