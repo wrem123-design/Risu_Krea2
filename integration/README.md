@@ -15,10 +15,10 @@ does not start a second process when a port is already listening.
 The ComfyUI process uses the same `--use-flash-attention` and isolated Python
 launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 
-The included `🔦라이트보드 - 3.4.0.1 Krea2.risum` changes only the missing-value
-fallback for validation retries: `lb-xnai` receives two repair attempts when
-`toggle_lightboard.maxRetries` is blank, while every unrelated manifest retains
-the original zero-retry fallback.
+The original LightBoard 3.4.0 backend is used unchanged. Image-count completion
+belongs to the illustration module's final output boundary and does not require
+backend-wide validation retry changes. Set the backend's standard `최대 시도`
+control to `2` to retain focused repair for genuinely missing fields.
 
 ## PocketRisu setup
 

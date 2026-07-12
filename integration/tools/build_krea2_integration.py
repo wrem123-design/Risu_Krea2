@@ -42,8 +42,6 @@ REMOVED_NODE_IDS = {
 
 MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.12"
 VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4412"
-LIGHTBOARD_BACKEND_NAME = "🔦라이트보드 - 3.4.0.1 Krea2"
-XNAI_DEFAULT_VALIDATION_RETRIES = 2
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -1370,71 +1368,6 @@ def _build_legacy_module(
     return bytes((111, 0)) + struct.pack("<I", len(reencoded)) + reencoded + bytes((0,))
 
 
-def build_lightboard_backend(source: Path, output: Path) -> None:
-    """Default missing validation retries to two for lb-xnai only."""
-
-    payload = source.read_bytes()
-    if len(payload) < 7 or payload[:2] != bytes((111, 0)):
-        raise ValueError("LightBoard backend has an invalid Risu module header")
-    main_length = struct.unpack_from("<I", payload, 2)[0]
-    encoded_main = payload[6 : 6 + main_length]
-    if payload[6 + main_length :] != bytes((0,)):
-        raise ValueError("LightBoard backend contains unsupported embedded assets")
-
-    encode_map, decode_map = _load_rpack_maps(source)
-    decoded_main = bytes(decode_map[value] for value in encoded_main)
-    legacy = _as_object(json.loads(decoded_main.decode("utf-8")), "LightBoard backend")
-    module = _as_object(legacy["module"], "LightBoard backend module")
-    triggers = [
-        _as_object(trigger, "LightBoard trigger")
-        for trigger in _as_list(module.get("trigger", []), "LightBoard triggers")
-    ]
-
-    original = (
-        "local maxRetries = tonumber(getGlobalVar(triggerId, "
-        "C.CONFIG.MAX_RETRIES)) or 0"
-    )
-    replacement = "\n".join(
-        (
-            "local configuredMaxRetries = tonumber(getGlobalVar(triggerId, C.CONFIG.MAX_RETRIES))",
-            "local maxRetries = configuredMaxRetries",
-            "if maxRetries == nil then",
-            f"maxRetries = man.identifier == 'lb-xnai' and {XNAI_DEFAULT_VALIDATION_RETRIES} or 0",
-            "end",
-        )
-    )
-    replacements = 0
-    for trigger in triggers:
-        effects = [
-            _as_object(effect, "LightBoard trigger effect")
-            for effect in _as_list(trigger.get("effect", []), "LightBoard trigger effects")
-        ]
-        for effect in effects:
-            code = effect.get("code")
-            if isinstance(code, str) and original in code:
-                effect["code"] = code.replace(original, replacement, 1)
-                replacements += 1
-    if replacements != 1:
-        raise ValueError(
-            f"Expected one LightBoard retry default, replaced {replacements}"
-        )
-
-    module["name"] = LIGHTBOARD_BACKEND_NAME
-    module["description"] = (
-        "LightBoard backend 3.4.0 with a Krea2-only fallback of two validation "
-        "retries when the global maximum-attempt setting is blank."
-    )
-    serialized = json.dumps(legacy, ensure_ascii=False, indent=2).encode("utf-8")
-    reencoded = bytes(encode_map[value] for value in serialized)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(
-        bytes((111, 0))
-        + struct.pack("<I", len(reencoded))
-        + reencoded
-        + bytes((0,))
-    )
-
-
 def configure_hook_manager(
     config_path: Path,
     workflow_path: Path,
@@ -1467,8 +1400,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-workflow", type=Path, required=True)
     parser.add_argument("--source-module", type=Path, required=True)
     parser.add_argument("--output-module", type=Path, required=True)
-    parser.add_argument("--source-lightboard-backend", type=Path)
-    parser.add_argument("--output-lightboard-backend", type=Path)
     return parser.parse_args()
 
 
@@ -1478,13 +1409,6 @@ def main() -> None:
     args = _parse_args()
     build_workflow(args.source_workflow, args.output_workflow)
     build_module(args.source_module, args.output_module)
-    if bool(args.source_lightboard_backend) != bool(args.output_lightboard_backend):
-        raise ValueError("Both LightBoard backend paths must be supplied together")
-    if args.source_lightboard_backend and args.output_lightboard_backend:
-        build_lightboard_backend(
-            args.source_lightboard_backend,
-            args.output_lightboard_backend,
-        )
 
 
 if __name__ == "__main__":

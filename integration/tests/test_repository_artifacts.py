@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import py_compile
-import struct
 import unittest
 import zipfile
 from pathlib import Path
@@ -16,7 +15,6 @@ WORKFLOW = REPOSITORY / "workflow" / "Krea2_turbo_chatbot.json"
 BUILDER = REPOSITORY / "integration" / "tools" / "build_krea2_integration.py"
 LAUNCHER = REPOSITORY / "integration" / "start_krea2_stack.ps1"
 ONE_CLICK_LAUNCHER = REPOSITORY / "integration" / "start_krea2_chatbot.bat"
-LIGHTBOARD_BACKEND = REPOSITORY / "module" / "🔦라이트보드 - 3.4.0.1 Krea2.risum"
 HOOK_PATCH = (
     REPOSITORY
     / "hooking_manager"
@@ -160,8 +158,8 @@ class RepositoryArtifactTests(unittest.TestCase):
             entries["lb-xnai.lb.onInput"],
         )
 
-    def test_lightboard_backend_defaults_xnai_validation_retries_only(self) -> None:
-        """Keep Krea2 count repair active without changing unrelated manifests."""
+    def test_original_lightboard_backend_is_not_forked(self) -> None:
+        """Keep count completion inside the illustration module."""
 
         spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
         self.assertIsNotNone(spec)
@@ -169,20 +167,9 @@ class RepositoryArtifactTests(unittest.TestCase):
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
 
-        self.assertEqual(builder.XNAI_DEFAULT_VALIDATION_RETRIES, 2)
-        self.assertTrue(LIGHTBOARD_BACKEND.exists())
-        payload = LIGHTBOARD_BACKEND.read_bytes()
-        main_length = struct.unpack_from("<I", payload, 2)[0]
-        _, decode_map = builder._load_rpack_maps(module_path())
-        decoded = bytes(decode_map[value] for value in payload[6 : 6 + main_length])
-        module = json.loads(decoded.decode("utf-8"))["module"]
-        code = module["trigger"][0]["effect"][0]["code"]
-
-        self.assertEqual(module["name"], "🔦라이트보드 - 3.4.0.1 Krea2")
-        self.assertIn("man.identifier == 'lb-xnai' and 2 or 0", code)
-        self.assertNotIn(
-            "local maxRetries = tonumber(getGlobalVar(triggerId, C.CONFIG.MAX_RETRIES)) or 0",
-            code,
+        self.assertFalse(hasattr(builder, "build_lightboard_backend"))
+        self.assertFalse(
+            any("3.4.0.1 Krea2" in path.name for path in (REPOSITORY / "module").iterdir())
         )
 
     def test_select_indices_and_runtime_safety_are_normalized(self) -> None:
