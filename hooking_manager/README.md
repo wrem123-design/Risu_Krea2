@@ -8,6 +8,7 @@
 - 영문 캐릭터명과 적용 강도 저장
 - 모듈의 `[[KREA2_CHARACTER:...]]` 표식 제거
 - 영문 이름 정확 일치 시 LoRA 하나만 적용
+- 모듈의 `[[KREA2_MULTI_CHARACTER]]` 표식 제거 및 캐릭터 LoRA 무조건 우회
 - 빈칸 또는 불일치 시 동적 LoRA 노드 삭제 및 fedor 경로 우회
 - 원본 워크플로 해상도 표시와 가로·세로 오버라이드 저장
 - 다음 생성 요청의 `Image Width`·`Image Height` 노드에 저장값 적용
