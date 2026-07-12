@@ -5,6 +5,7 @@ PocketRisu 삽화 모듈과 Krea2 전용 ComfyUI 워크플로를 연결하는 �
 이 저장소에는 다음 항목만 기록합니다.
 
 - PocketRisu Krea2 삽화 모듈
+- Krea2 장수 검증 재시도를 보장하는 LightBoard 백엔드 모듈
 - Krea2 + FlashAttention + fedor_bypass 워크플로
 - 프리셋별 캐릭터 매칭·일괄 LoRA 라우팅을 위한 Hooking Manager 패치
 - 모듈과 워크플로 빌더, 테스트, 설치 문서
@@ -33,6 +34,9 @@ Hooking Manager와 PocketRisu가 함께 실행됩니다. 현재 4.4.10 모듈은
 
 문단 길이만 부족한 응답은 전체 장면을 다시 계획하지 않고, 기존 TOON 구조와 정상
 필드를 그대로 보존하면서 검증에서 지목된 문단만 보조 모델이 다시 작성합니다.
+`🔦라이트보드 - 3.4.0.1 Krea2` 백엔드는 전역 최대 시도 값이 비어 있을 때
+`lb-xnai`에만 검증 재시도 2회를 적용합니다. 다른 LightBoard 출력 모듈의 기본값은
+변경하지 않습니다.
 
 ## 모듈 출력 설정
 

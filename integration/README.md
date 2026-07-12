@@ -15,6 +15,11 @@ does not start a second process when a port is already listening.
 The ComfyUI process uses the same `--use-flash-attention` and isolated Python
 launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 
+The included `🔦라이트보드 - 3.4.0.1 Krea2.risum` changes only the missing-value
+fallback for validation retries: `lb-xnai` receives two repair attempts when
+`toggle_lightboard.maxRetries` is blank, while every unrelated manifest retains
+the original zero-retry fallback.
+
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
