@@ -40,11 +40,13 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.8"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.9"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
 Read the current chat, its setting, and the per-bot lorebook named `lb-xnai.lb.extra`. The image-count setting is `{{getglobalvar::toggle_lb-xnai.imageCount}}`: `0` means automatic selection of a minimum of 4 and a maximum of 6 image descriptions, while an integer from 1 through 6 requires exactly that many. A missing or invalid value also uses automatic mode. A key visual counts toward the requested total.
+
+In automatic mode, never return only one, two, or three image descriptors. Return at least four separate descriptor list items, one complete descriptor per intended image. Do not treat `scenes[n]` as a single scene placeholder: repeat the scene item for every selected illustration, accounting for any keyvis in the total.
 
 The key-visual setting is `{{getglobalvar::toggle_lb-xnai.keyVisual}}`: `0` is automatic and includes one only when useful, `1` requires exactly one key visual, and `2` forbids keyvis. The scene-selection setting is `{{getglobalvar::toggle_lb-xnai.sceneSelection}}`: `0` distributes images evenly across meaningful paragraph boundaries, `1` selects the strongest visually consequential moments, and `2` favors meaningful moments nearer the end while retaining enough context. Missing or invalid values use automatic keyvis and balanced scene selection.
 
@@ -287,6 +289,11 @@ local function main(triggerId, output)
     else
       table.insert(structuralErrors, 'The response must describe between ' .. tostring(minimumImages) .. ' and ' .. tostring(maximumImages) .. ' images; received ' .. tostring(imageCount) .. '.')
     end
+    if imageCount < minimumImages then
+      table.insert(structuralErrors, 'Add ' .. tostring(minimumImages - imageCount) .. ' missing image descriptors to the complete response. Preserve every existing valid descriptor, then return at least ' .. tostring(minimumImages) .. ' and no more than ' .. tostring(maximumImages) .. ' total images including keyvis.')
+    elseif imageCount > maximumImages then
+      table.insert(structuralErrors, 'Remove ' .. tostring(imageCount - maximumImages) .. ' excess image descriptors while preserving the strongest valid moments. Return no more than ' .. tostring(maximumImages) .. ' total images including keyvis.')
+    end
   end
 
   local keyVisualPolicy = resolveKeyVisualPolicy(triggerId)
@@ -418,6 +425,27 @@ local function updateExtraRegistry(triggerId, response)
   setState(triggerId, 'lb-xnai-extra-registry-v1', registry)
   setChatVar(triggerId, 'lb-xnai-extra-registry-prompt', formatExtraRegistry(registry))
   return registry
+end
+
+local function validateResponseImageCount(triggerId, response)
+  local raw = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.imageCount'))
+  local exact = tonumber(raw)
+  local minimumImages = 4
+  local maximumImages = 6
+  if exact and exact % 1 == 0 and exact >= 1 and exact <= 6 then
+    minimumImages = exact
+    maximumImages = exact
+  end
+
+  local scenes = type(response.scenes) == 'table' and response.scenes or {}
+  local imageCount = #scenes + (response.keyvis and 1 or 0)
+  if imageCount >= minimumImages and imageCount <= maximumImages then
+    return true, ''
+  end
+  if minimumImages == maximumImages then
+    return false, '정확히 ' .. tostring(minimumImages) .. '장이 필요하지만 ' .. tostring(imageCount) .. '장만 반환되었습니다.'
+  end
+  return false, '자동(4~6) 설정은 최소 4장이 필요하지만 ' .. tostring(imageCount) .. '장만 반환되었습니다.'
 end
 
 local function buildPresetPrompt(triggerId, desc)
@@ -570,6 +598,7 @@ return {
   locateTargetChat = locateTargetChat,
   persistStateAndHistory = persistStateAndHistory,
   updateExtraRegistry = updateExtraRegistry,
+  validateResponseImageCount = validateResponseImageCount,
 }
 """
 
@@ -747,6 +776,20 @@ def _upgrade_on_output_lua(content: str) -> str:
         if memory_anchor not in content:
             raise ValueError("Source module output hook cannot attach extra memory")
         content = content.replace(memory_anchor, memory_replacement, 1)
+    count_anchor = """    gen.updateExtraRegistry(tid, response)
+
+    ---@type XNAIStackItem"""
+    count_replacement = """    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
+    if not imageCountValid then
+      return nil, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
+    end
+    gen.updateExtraRegistry(tid, response)
+
+    ---@type XNAIStackItem"""
+    if "gen.validateResponseImageCount(tid, response)" not in content:
+        if count_anchor not in content:
+            raise ValueError("Source module output hook cannot enforce image count")
+        content = content.replace(count_anchor, count_replacement, 1)
     return content
 
 
@@ -807,7 +850,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.8-krea2"
+        data["character_version"] = "4.4.9-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

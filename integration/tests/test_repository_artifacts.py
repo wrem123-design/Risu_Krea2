@@ -24,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.8 module artifact."""
+    """Return the single published Krea2 4.4.9 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.8" in path.name
+        if "Krea2 4.4.9" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.8 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.9 module, found {matches}")
     return matches[0]
 
 
@@ -102,6 +102,30 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("must contain exactly", builder.VALIDATOR_LUA)
         self.assertIn("must include a key visual", builder.VALIDATOR_LUA)
         self.assertIn("must not include a key visual", builder.VALIDATOR_LUA)
+
+    def test_invalid_image_count_is_repaired_and_blocked_before_generation(self) -> None:
+        """Do not silently generate one image when automatic mode requires 4–6."""
+
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertIn("never return only one, two, or three", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("missing image descriptors", builder.VALIDATOR_LUA)
+        self.assertIn("validateResponseImageCount", builder.GENERATOR_LUA)
+        self.assertIn("자동(4~6) 설정은 최소 4장", builder.GENERATOR_LUA)
+
+        with zipfile.ZipFile(module_path()) as archive:
+            card = json.loads(archive.read("card.json").decode("utf-8"))
+        entries = {
+            entry["name"]: entry["content"]
+            for entry in card["data"]["character_book"]["entries"]
+        }
+        on_output = entries["lb-xnai.lb.onOutput"]
+        self.assertIn("gen.validateResponseImageCount(tid, response)", on_output)
+        self.assertIn("설정한 이미지 장수와 맞지 않습니다", on_output)
 
     def test_select_indices_and_runtime_safety_are_normalized(self) -> None:
         """Match PocketRisu's stored select indices and guard runtime boundaries."""
@@ -176,13 +200,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_448_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_449_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.8")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.9")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
