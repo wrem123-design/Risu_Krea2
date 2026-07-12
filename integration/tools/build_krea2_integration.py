@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.7"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.8"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -52,7 +52,13 @@ Each image may contain one to three identifiable characters. Use one character f
 
 The `lb-xnai.lb.extra` lorebook is the authoritative source for every identifiable character's fixed physical identity. Copy the supplied identity traits for all visible participants into `appearance`, describing the primary character first and keeping each person's traits clearly separated. Never merge traits between characters. Do not put clothing, pose, expression, camera, lighting, or background in `appearance`.
 
-For every image, output `name`, `character_count`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and must equal the number of identifiable visible characters. `name` identifies the primary focal character and must be the canonical English name written before the first slash in that character's `### English Name / Korean Name` profile heading. Never use the Korean alias or invent a spelling in this field. A one-character descriptor may route that character's LoRA. A descriptor with two or three characters always disables character LoRA routing to prevent one identity from affecting every face. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
+`lb-xnai.lb.extra` is read-only canonical lore and always has priority. The temporary extra-character registry below is separate chat-scoped memory. Reuse an existing extra's exact `identity_key`, `name`, and immutable physical `appearance` whenever the same story person returns. Never use a registry entry for a canonical lorebook character, never overwrite canonical traits, and never copy clothing, pose, expression, lighting, or location into identity appearance.
+
+<temporary-extra-registry>
+{{getvar::lb-xnai-extra-registry-prompt}}
+</temporary-extra-registry>
+
+For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and equal both the visible identifiable character count and the number of identity records. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the English name before the first slash in their lorebook heading and source `lorebook`. Unlisted people use source `extra` and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. Only a one-character canonical lorebook descriptor may route a LoRA. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
 
 1. `appearance` (at least 30 words): name and describe every identifiable participant using fixed age category, skin, build, face shape, eyes, brows, nose, lips, hair, and permanent marks actually supplied by the profiles or story. Keep descriptions person-specific and do not invent conflicting identity traits merely to increase length.
 2. `outfit` (at least 35 words): describe the exact current clothing and accessories of every visible participant, including color, cut, fit, layers, fabric, fasteners, footwear, and continuity. A completed outfit change fully replaces the prior outfit.
@@ -70,6 +76,11 @@ FORMAT_CONTRACT = """<lb-xnai>
 scenes[n]:
   - name: ...
     character_count: 1
+    identities[n]:
+      - identity_key: ...
+        name: ...
+        source: lorebook
+        appearance: ...
     appearance: ...
     outfit: ...
     background: ...
@@ -79,6 +90,11 @@ scenes[n]:
 keyvis:
   name: ...
   character_count: 1
+  identities[n]:
+    - identity_key: ...
+      name: ...
+      source: lorebook
+      appearance: ...
   appearance: ...
   outfit: ...
   background: ...
@@ -127,6 +143,11 @@ lb-xnai.imageCount=생성 장수=select=자동(4~6),1,2,3,4,5,6
 =자동은 장면 중요도에 따라 4~6장=caption
 lb-xnai.keyVisual=키비주얼=select=자동,항상 포함,사용 안 함
 lb-xnai.sceneSelection=장면 선택=select=균형 배치,핵심 장면 우선,후반부 우선
+=———————🧑엑스트라 기억=divider
+lb-xnai.extraMemory=엑스트라 기억=select=사용,사용 안 함
+lb-xnai.extraMemoryLimit=기억 인원=text
+=사용 안 함 선택 시 임시 기억 삭제. 공식 로어북은 유지=caption
+=1~50, 기본 20=caption
 =———————📒스타일=divider
 lb-xnai.preset=프　리　셋=text
 ="프리셋 X" 로어북 사용. "X" 부분만 입력. 기본 "1"=caption
@@ -193,6 +214,31 @@ local function validateDescriptor(desc, label, requireSlot, structuralErrors, re
   local characterCount = tonumber(desc.character_count)
   if not characterCount or characterCount % 1 ~= 0 or characterCount < 1 or characterCount > 3 then
     table.insert(structuralErrors, label .. ' character_count must be an integer from 1 to 3.')
+  end
+
+  local function validateIdentities()
+    if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then
+      table.insert(structuralErrors, label .. ' identities must contain exactly character_count records.')
+      return
+    end
+    local primaryFound = false
+    for identityIndex, identity in ipairs(desc.identities) do
+      if type(identity) ~= 'table'
+          or trimText(identity.identity_key) == ''
+          or trimText(identity.name) == ''
+          or trimText(identity.appearance) == ''
+          or (identity.source ~= 'lorebook' and identity.source ~= 'extra') then
+        table.insert(structuralErrors, label .. ' identity ' .. tostring(identityIndex) .. ' is invalid.')
+      elseif trimText(identity.name):lower() == trimText(desc.name):lower() then
+        primaryFound = true
+      end
+    end
+    if not primaryFound then
+      table.insert(structuralErrors, label .. ' primary name has no matching identity record.')
+    end
+  end
+  if characterCount and characterCount >= 1 and characterCount <= 3 then
+    validateIdentities()
   end
 
   for field, minimum in pairs(minimumWords) do
@@ -302,6 +348,78 @@ local function safeReplace(text, token, value)
   return (text:gsub(token, escaped))
 end
 
+local function normalizeIdentity(value)
+  return trimText(value):lower():gsub('[%p%s]+', '')
+end
+
+local function canonicalLorebookNames(triggerId)
+  local names = {}
+  local book = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
+  local content = book and book.content or ''
+  for line in content:gmatch('[^\r\n]+') do
+    local heading = line:match('^###%s+(.+)$')
+    if heading then
+      local english, alias = heading:match('^%s*(.-)%s*/%s*(.-)%s*$')
+      if english then names[normalizeIdentity(english)] = true end
+      if alias then names[normalizeIdentity(alias)] = true end
+    end
+  end
+  return names
+end
+
+local function isCanonicalLorebookName(triggerId, name)
+  return canonicalLorebookNames(triggerId)[normalizeIdentity(name)] == true
+end
+
+local function formatExtraRegistry(registry)
+  local lines = {}
+  for _, identity in ipairs(registry) do
+    table.insert(lines, '- identity_key: ' .. identity.identity_key)
+    table.insert(lines, '  name: ' .. identity.name)
+    table.insert(lines, '  appearance: ' .. identity.appearance)
+  end
+  return table.concat(lines, '\n')
+end
+
+local function updateExtraRegistry(triggerId, response)
+  local enabled = getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemory') or '0'
+  if enabled == '1' then
+    setState(triggerId, 'lb-xnai-extra-registry-v1', {})
+    setChatVar(triggerId, 'lb-xnai-extra-registry-prompt', '')
+    return {}
+  end
+  local registry = getState(triggerId, 'lb-xnai-extra-registry-v1') or {}
+  if type(registry) ~= 'table' then registry = {} end
+  local canonicalNames = canonicalLorebookNames(triggerId)
+  local descriptors = {}
+  if response.keyvis then table.insert(descriptors, response.keyvis) end
+  for _, descriptor in ipairs(response.scenes or {}) do table.insert(descriptors, descriptor) end
+  for _, descriptor in ipairs(descriptors) do
+    for _, identity in ipairs(descriptor.identities or {}) do
+      local key = trimText(identity.identity_key)
+      local name = trimText(identity.name)
+      local appearance = trimText(identity.appearance)
+      if identity.source == 'extra'
+          and key ~= '' and name ~= '' and appearance ~= ''
+          and not canonicalNames[normalizeIdentity(name)]
+          and not canonicalNames[normalizeIdentity(key)] then
+        for index = #registry, 1, -1 do
+          if normalizeIdentity(registry[index].identity_key) == normalizeIdentity(key) then
+            table.remove(registry, index)
+          end
+        end
+        table.insert(registry, { identity_key = key, name = name, appearance = appearance })
+      end
+    end
+  end
+  local limit = math.floor(tonumber(getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemoryLimit')) or 20)
+  if limit < 1 then limit = 1 elseif limit > 50 then limit = 50 end
+  while #registry > limit do table.remove(registry, 1) end
+  setState(triggerId, 'lb-xnai-extra-registry-v1', registry)
+  setChatVar(triggerId, 'lb-xnai-extra-registry-prompt', formatExtraRegistry(registry))
+  return registry
+end
+
 local function buildPresetPrompt(triggerId, desc)
   local preset = getGlobalVar(triggerId, 'toggle_lb-xnai.preset')
   if not preset or preset == '' or preset == 'null' then
@@ -368,7 +486,7 @@ local function buildPresetPrompt(triggerId, desc)
   positive = safeReplace(positive, '{prompt}', prompt)
   positive = positive:gsub('\n\n\n+', '\n\n')
 
-  if characterCount == 1 then
+  if characterCount == 1 and isCanonicalLorebookName(triggerId, name) then
     local routingName = name:gsub('[%[%]\r\n]', ' '):gsub('%s+', ' ')
     positive = '[[KREA2_CHARACTER:' .. routingName .. ']]\n' .. positive
   else
@@ -451,6 +569,7 @@ return {
   insertSlots = insertSlots,
   locateTargetChat = locateTargetChat,
   persistStateAndHistory = persistStateAndHistory,
+  updateExtraRegistry = updateExtraRegistry,
 }
 """
 
@@ -613,6 +732,21 @@ def _upgrade_on_output_lua(content: str) -> str:
             raise ValueError("Source module output hook has an unsupported layout")
         content = content.replace(policy_anchor, policy_replacement, 1)
         content = content.replace(placement_anchor, placement_replacement, 1)
+    memory_anchor = """    if keyVisualPolicy == '2' then
+      response.keyvis = nil
+    end
+
+    ---@type XNAIStackItem"""
+    memory_replacement = """    if keyVisualPolicy == '2' then
+      response.keyvis = nil
+    end
+    gen.updateExtraRegistry(tid, response)
+
+    ---@type XNAIStackItem"""
+    if "gen.updateExtraRegistry(tid, response)" not in content:
+        if memory_anchor not in content:
+            raise ValueError("Source module output hook cannot attach extra memory")
+        content = content.replace(memory_anchor, memory_replacement, 1)
     return content
 
 
@@ -673,7 +807,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.7-krea2"
+        data["character_version"] = "4.4.8-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

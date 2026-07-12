@@ -18,7 +18,7 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.7.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.8.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -37,7 +37,7 @@ is assembled into five English natural-language paragraphs: appearance, outfit,
 background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words, and the module rejects missing
 or underspecified paragraphs before requesting an image.
-Version 4.4.7 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.8 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's canonical English name as an internal routing marker, and Hooking
@@ -66,6 +66,13 @@ count remain available. PocketRisu select controls are interpreted by their stor
 zero-based indices. Disabled keyvis is enforced both during validation and immediately
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
+
+Temporary extras use per-descriptor identity records and a chat-scoped
+`lb-xnai-extra-registry-v1` state. Only records marked `source=extra` are retained,
+up to the configured 1–50 limit, and the immutable appearance is injected into the
+next auxiliary-model request through a separate chat variable. The canonical
+`lb-xnai.lb.extra` lorebook is read-only and takes precedence on normalized English
+or Korean name collisions. Temporary extras never receive character LoRA routing.
 
 ## Workflow contract
 

@@ -24,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.7 module artifact."""
+    """Return the single published Krea2 4.4.8 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.7" in path.name
+        if "Krea2 4.4.8" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.7 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.8 module, found {matches}")
     return matches[0]
 
 
@@ -138,13 +138,51 @@ class RepositoryArtifactTests(unittest.TestCase):
             entries["lb-xnai.lb.onInput"],
         )
 
-    def test_module_is_valid_positive_only_krea2_447_archive(self) -> None:
+    def test_extra_character_memory_is_isolated_from_canonical_lorebook(self) -> None:
+        """Persist only temporary extra identities without mutating canonical lore."""
+
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertIn("{{getvar::lb-xnai-extra-registry-prompt}}", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("read-only", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("identities[n]", builder.FORMAT_CONTRACT)
+        self.assertIn("identity_key:", builder.FORMAT_CONTRACT)
+        self.assertIn("source: lorebook", builder.FORMAT_CONTRACT)
+        self.assertIn("validateIdentities", builder.VALIDATOR_LUA)
+        self.assertIn("lb-xnai-extra-registry-v1", builder.GENERATOR_LUA)
+        self.assertIn("lb-xnai-extra-registry-prompt", builder.GENERATOR_LUA)
+        self.assertIn("isCanonicalLorebookName", builder.GENERATOR_LUA)
+        self.assertIn("identity.source == 'extra'", builder.GENERATOR_LUA)
+        self.assertIn("toggle_lb-xnai.extraMemory", builder.GENERATOR_LUA)
+        self.assertIn("toggle_lb-xnai.extraMemoryLimit", builder.GENERATOR_LUA)
+        self.assertNotIn("setPriorityLoreBook", builder.GENERATOR_LUA)
+        self.assertNotIn("setLoreBook", builder.GENERATOR_LUA)
+        self.assertIn(
+            "characterCount == 1 and isCanonicalLorebookName(triggerId, name)",
+            builder.GENERATOR_LUA,
+        )
+        self.assertIn("lb-xnai.extraMemory=엑스트라 기억=select=사용,사용 안 함", builder.MODULE_TOGGLES)
+        self.assertIn("lb-xnai.extraMemoryLimit=기억 인원=text", builder.MODULE_TOGGLES)
+
+        with zipfile.ZipFile(module_path()) as archive:
+            card = json.loads(archive.read("card.json").decode("utf-8"))
+        entries = {
+            entry["name"]: entry["content"]
+            for entry in card["data"]["character_book"]["entries"]
+        }
+        self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
+
+    def test_module_is_valid_positive_only_krea2_448_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.7")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.8")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -204,6 +242,8 @@ class RepositoryArtifactTests(unittest.TestCase):
                 "lb-xnai.imageCount",
                 "lb-xnai.keyVisual",
                 "lb-xnai.sceneSelection",
+                "lb-xnai.extraMemory",
+                "lb-xnai.extraMemoryLimit",
                 "lb-xnai.preset",
                 "lb-xnai.kv.position",
                 "lb-xnai.maxSaves",
