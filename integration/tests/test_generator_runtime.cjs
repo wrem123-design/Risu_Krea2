@@ -71,6 +71,18 @@ assert(completed.scenes[1].name == 'Scene A')
 assert(completed.scenes[2].name == 'Key Scene')
 assert(completed.scenes[3].name == 'Scene B')
 assert(completed.scenes[4].name == 'Scene C')
+
+queue = {
+  ${descriptor('Fresh A', 'gray hoodie', 'night bus stop', 'wide waiting shot')},
+  ${descriptor('Fresh B', 'green coat', 'corner store', 'medium conversation shot')},
+  ${descriptor('Fresh C', 'navy uniform', 'empty classroom', 'over shoulder reaction shot')},
+  ${descriptor('Fresh D', 'brown jacket', 'apartment hallway', 'low angle arrival shot')}
+}
+local recovered = gen.completeResponseImageCount('test', {
+  scenes = { malformed }
+}, 'one\\n\\ntwo\\n\\nthree\\n\\nfour')
+assert(#recovered.scenes == 4, 'an all-malformed response was not rebuilt')
+assert(recovered.scenes[1].name == 'Fresh A', 'fresh seed scene was not requested')
 return true
 `;
 
@@ -82,7 +94,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.13.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.14.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));

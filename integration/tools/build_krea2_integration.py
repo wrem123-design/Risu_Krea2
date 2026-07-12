@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.13"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4413"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.14"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4414"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -668,7 +668,11 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
   end
 
   if not descriptorReady(response.scenes[1] or response.keyvis) then
-    return error('완성 가능한 기본 이미지 설명이 없습니다.')
+    local seedScene = requestOneDescriptor(triggerId, response, fullChatContent, false)
+    if not descriptorReady(seedScene) then
+      return error('정상 이미지 설명이 하나도 없어 첫 씬을 두 번 새로 요청했지만 생성하지 못했습니다.')
+    end
+    table.insert(response.scenes, seedScene)
   end
 
   if (keyVisualPolicy == '1' or keyVisualPolicy == '항상 포함') and not response.keyvis then
@@ -1211,7 +1215,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.13-krea2"
+        data["character_version"] = "4.4.14-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
