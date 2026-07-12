@@ -1,0 +1,114 @@
+diff --git a/modes/krea2_character_lora.py b/modes/krea2_character_lora.py
+index b69739b..fbdb06b 100644
+--- a/modes/krea2_character_lora.py
++++ b/modes/krea2_character_lora.py
+@@ -6,9 +6,10 @@ import copy
+ import json
+ import math
+ import re
++import secrets
+ import unicodedata
+ from pathlib import Path
+-from typing import Literal, TypedDict, cast
++from typing import Callable, Literal, TypedDict, cast
+ 
+ 
+ DYNAMIC_LORA_NODE_TITLE = "Krea2 캐릭터 LoRA (동적)"
+@@ -99,6 +100,32 @@ def _is_number(value: object) -> bool:
+     return isinstance(value, (int, float)) and not isinstance(value, bool)
+ 
+ 
++def randomize_workflow_seeds(
++    workflow: JsonObject,
++    seed_factory: Callable[[], int] | None = None,
++) -> int:
++    """Replace numeric sampler seeds so ComfyUI cannot reuse stale cache."""
++
++    make_seed = seed_factory or (lambda: secrets.randbelow(2**63))
++    changed = 0
++    for raw_node in workflow.values():
++        if not isinstance(raw_node, dict):
++            continue
++        raw_inputs = raw_node.get("inputs")
++        if not isinstance(raw_inputs, dict):
++            continue
++        for input_name in ("seed", "noise_seed"):
++            current = raw_inputs.get(input_name)
++            if not _is_number(current):
++                continue
++            replacement = int(make_seed())
++            if replacement == current:
++                replacement = (replacement + 1) % (2**63)
++            raw_inputs[input_name] = replacement
++            changed += 1
++    return changed
++
++
+ def load_power_lora_catalog(workflow_path: Path) -> list[CatalogEntry]:
+     """Read Krea2 LoRA filenames and defaults from Power LoRA Loader nodes."""
+ 
+diff --git a/server.py b/server.py
+index 1d77f61..24a5644 100644
+--- a/server.py
++++ b/server.py
+@@ -56,6 +56,7 @@ from modes.krea2_character_lora import (
+     load_resolution_override,
+     load_workflow_resolution,
+     merge_catalog_with_mappings,
++    randomize_workflow_seeds,
+     resolve_preset_loras,
+     route_lora_chain,
+     save_mapping_file,
+@@ -657,6 +658,12 @@ def build_prompt(
+         "proxy.log",
+         f"Krea2 해상도 적용: {resolution['width']}x{resolution['height']}",
+     )
++    randomized_seeds = randomize_workflow_seeds(wf)
++    if randomized_seeds:
++        log_to_file(
++            "proxy.log",
++            f"Krea2 seed 무작위화: {randomized_seeds}개 입력",
++        )
+     selections = _resolve_krea2_lora_selections(preset, character_name)
+     routed = route_lora_chain(wf, selections)
+     if selections:
+diff --git a/tests/test_krea2_character_lora.py b/tests/test_krea2_character_lora.py
+index ffe6a9d..a66fd8a 100644
+--- a/tests/test_krea2_character_lora.py
++++ b/tests/test_krea2_character_lora.py
+@@ -427,6 +427,35 @@ class RoutingTests(unittest.TestCase):
+         self.assertNotIn("297", routed)
+         self.assertEqual(routed["204"]["inputs"]["model"], ["206", 0])
+ 
++    def test_randomizes_numeric_seeds_to_prevent_empty_cached_history(self) -> None:
++        """Force a new ComfyUI execution when the same scene is regenerated."""
++
++        module = load_module()
++        workflow = {
++            "95": {
++                "inputs": {"noise_seed": 12345},
++                "class_type": "RandomNoise",
++            },
++            "204": {
++                "inputs": {"seed": 22222},
++                "class_type": "KSampler",
++            },
++            "96": {
++                "inputs": {"noise_seed": ["95", 0]},
++                "class_type": "OtherNode",
++            },
++        }
++
++        seeds = iter((67890, 98765))
++        changed = module.randomize_workflow_seeds(
++            workflow, seed_factory=lambda: next(seeds)
++        )
++
++        self.assertEqual(changed, 2)
++        self.assertEqual(workflow["95"]["inputs"]["noise_seed"], 67890)
++        self.assertEqual(workflow["204"]["inputs"]["seed"], 98765)
++        self.assertEqual(workflow["96"]["inputs"]["noise_seed"], ["95", 0])
++
+     def test_resolves_exclusive_preset_modes(self) -> None:
+         module = load_module()
+         mappings = [

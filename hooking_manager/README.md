@@ -16,12 +16,18 @@
 - 프리셋별 `캐릭터 매칭`, `선택 LoRA 일괄 적용`, `미적용` 모드
 - `프리셋 2D`를 사용할 때 식별자 `2D`로 선택한 그림체 LoRA 일괄 적용
 
+`patches/0002-randomize-krea2-workflow-seeds.patch`는 매 요청마다 워크플로의 숫자형
+`seed`와 `noise_seed`를 새 값으로 바꿉니다. 같은 장면을 다시 생성해도 ComfyUI가
+전체 실행을 캐시해 빈 `outputs`를 반환하지 않으므로 PocketRisu의 `filename` 오류를
+방지합니다.
+
 ## 적용
 
 Hooking Manager 저장소 루트에서 실행합니다.
 
 ```powershell
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0001-krea2-character-lora-routing.patch
+git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0002-randomize-krea2-workflow-seeds.patch
 ```
 
 로컬 `config.json`에는 다음 키를 추가합니다. 실제 환경에 맞는 원본 Krea2 워크플로 경로를 사용하세요.
