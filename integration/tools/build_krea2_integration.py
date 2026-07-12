@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.4"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.5"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -247,22 +247,6 @@ local function trimText(value)
   return prelude.trim(value)
 end
 
-local function wordCount(value)
-  local count = 0
-  for _ in trimText(value):gmatch('%S+') do
-    count = count + 1
-  end
-  return count
-end
-
-local minimumWords = {
-  appearance = 30,
-  outfit = 35,
-  background = 40,
-  composition = 55,
-  details = 45,
-}
-
 ---@param text string
 ---@return string
 local function insertSlots(text)
@@ -318,11 +302,11 @@ local function buildPresetPrompt(triggerId, desc)
       or characterCount % 1 ~= 0
       or characterCount < 1
       or characterCount > 3
-      or wordCount(appearance) < minimumWords.appearance
-      or wordCount(outfit) < minimumWords.outfit
-      or wordCount(background) < minimumWords.background
-      or wordCount(composition) < minimumWords.composition
-      or wordCount(details) < minimumWords.details then
+      or appearance == ''
+      or outfit == ''
+      or background == ''
+      or composition == ''
+      or details == '' then
     return nil
   end
 
@@ -605,7 +589,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.4-krea2"
+        data["character_version"] = "4.4.5-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

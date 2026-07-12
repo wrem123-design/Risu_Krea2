@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import py_compile
 import unittest
@@ -23,15 +24,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.4 module artifact."""
+    """Return the single published Krea2 4.4.5 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.4" in path.name
+        if "Krea2 4.4.5" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.4 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.5 module, found {matches}")
     return matches[0]
 
 
@@ -57,13 +58,33 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_444_archive(self) -> None:
+    def test_generator_accepts_nonempty_prose_after_validator_repair_attempts(self) -> None:
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertIn("wordCount(value)", builder.VALIDATOR_LUA)
+        self.assertIn("minimumWords", builder.VALIDATOR_LUA)
+        self.assertNotIn(
+            "wordCount(appearance) < minimumWords.appearance",
+            builder.GENERATOR_LUA,
+        )
+        self.assertNotIn(
+            "wordCount(outfit) < minimumWords.outfit",
+            builder.GENERATOR_LUA,
+        )
+        self.assertIn("or appearance == ''", builder.GENERATOR_LUA)
+        self.assertIn("or details == ''", builder.GENERATOR_LUA)
+
+    def test_module_is_valid_positive_only_krea2_445_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.4")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.5")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]

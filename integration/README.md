@@ -18,7 +18,7 @@ launch mode as `D:\ComfyUI-Easy-Install\Start ComfyUI FlashAttention.bat`.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.4.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.5.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -34,7 +34,7 @@ is assembled into five English natural-language paragraphs: appearance, outfit,
 background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words, and the module rejects missing
 or underspecified paragraphs before requesting an image.
-Version 4.4.4 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.5 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's canonical English name as an internal routing marker, and Hooking
@@ -42,6 +42,10 @@ Manager applies at most one exactly matched character LoRA. A two- or
 three-person descriptor sends a multi-character marker that always bypasses the
 dynamic LoRA node, preventing one identity LoRA from affecting every face.
 Empty or unmatched single-person names also bypass the dynamic LoRA node.
+The validator still requests targeted rewrites for prose below the documented
+minimums. If a backend reports validation complete with slightly short but
+non-empty prose, the final generator now degrades gracefully instead of blocking
+the image request with a duplicate word-count gate.
 Only `프리셋 1` is included. It assembles `{appearance}`, `{outfit}`, `{background}`,
 `{composition}`, and `{details}` as five paragraphs. Its fifth paragraph prefixes
 `{details}` with the fixed smartphone and photorealistic style. Module generation
