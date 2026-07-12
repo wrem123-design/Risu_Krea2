@@ -40,7 +40,7 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.3"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.4"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -154,36 +154,36 @@ local minimumWords = {
   details = 45,
 }
 
-local function validateDescriptor(desc, label, requireSlot, errors)
+local function validateDescriptor(desc, label, requireSlot, structuralErrors, repairFields)
   if type(desc) ~= 'table' then
-    table.insert(errors, label .. ' is not a valid object.')
+    table.insert(structuralErrors, label .. ' is not a valid object.')
     return
   end
 
   if trimText(desc.name) == '' then
-    table.insert(errors, label .. ' has no name.')
+    table.insert(structuralErrors, label .. ' has no name.')
   end
 
   local characterCount = tonumber(desc.character_count)
   if not characterCount or characterCount % 1 ~= 0 or characterCount < 1 or characterCount > 3 then
-    table.insert(errors, label .. ' character_count must be an integer from 1 to 3.')
+    table.insert(structuralErrors, label .. ' character_count must be an integer from 1 to 3.')
   end
 
   for field, minimum in pairs(minimumWords) do
     local value = trimText(desc[field])
     if value == '' then
-      table.insert(errors, label .. ' has no ' .. field .. ' field.')
+      table.insert(repairFields, label .. '.' .. field .. ': missing; write at least ' .. tostring(minimum) .. ' words.')
     elseif wordCount(value) < minimum then
-      table.insert(errors, label .. ' ' .. field .. ' must contain at least ' .. tostring(minimum) .. ' words; received ' .. tostring(wordCount(value)) .. '.')
+      table.insert(repairFields, label .. '.' .. field .. ': received ' .. tostring(wordCount(value)) .. ' words; rewrite it with at least ' .. tostring(minimum) .. ' words.')
     end
   end
 
   if desc.characters ~= nil then
-    table.insert(errors, label .. ' uses the obsolete nested characters field.')
+    table.insert(structuralErrors, label .. ' uses the obsolete nested characters field.')
   end
 
   if requireSlot and type(desc.slot) ~= 'number' then
-    table.insert(errors, label .. ' has an invalid slot field.')
+    table.insert(structuralErrors, label .. ' has an invalid slot field.')
   end
 end
 
@@ -198,28 +198,40 @@ local function main(_, output)
     error('InvalidOutput: Invalid TOON format. ' .. tostring(response))
   end
 
-  local errors = {}
+  local structuralErrors = {}
+  local repairFields = {}
   local scenes = {}
   if response.scenes ~= nil and type(response.scenes) ~= 'table' then
-    table.insert(errors, 'The scenes field is not a valid list.')
+    table.insert(structuralErrors, 'The scenes field is not a valid list.')
   elseif type(response.scenes) == 'table' then
     scenes = response.scenes
   end
 
   local imageCount = #scenes + (response.keyvis and 1 or 0)
   if imageCount < 4 or imageCount > 6 then
-    table.insert(errors, 'The response must describe between 4 and 6 images; received ' .. tostring(imageCount) .. '.')
+    table.insert(structuralErrors, 'The response must describe between 4 and 6 images; received ' .. tostring(imageCount) .. '.')
   end
 
   for index, descriptor in ipairs(scenes) do
-    validateDescriptor(descriptor, 'Scene ' .. tostring(index - 1), true, errors)
+    validateDescriptor(descriptor, 'Scene ' .. tostring(index - 1), true, structuralErrors, repairFields)
   end
   if response.keyvis then
-    validateDescriptor(response.keyvis, 'Keyvis', false, errors)
+    validateDescriptor(response.keyvis, 'Keyvis', false, structuralErrors, repairFields)
   end
 
-  if #errors > 0 then
-    error('InvalidOutput: Malformed Krea2 data.\n\n' .. table.concat(errors, '\n'))
+  if #structuralErrors > 0 then
+    local allErrors = {}
+    for _, message in ipairs(structuralErrors) do
+      table.insert(allErrors, message)
+    end
+    for _, message in ipairs(repairFields) do
+      table.insert(allErrors, message)
+    end
+    error('InvalidOutput: Malformed Krea2 data.\n\n' .. table.concat(allErrors, '\n'))
+  end
+
+  if #repairFields > 0 then
+    error('InvalidOutput: Repair only the underspecified prose fields in the previous response. Return the complete <lb-xnai> TOON block with the same scene count, order, slots, names, character_count values, and keyvis presence. Copy every field not listed below exactly without paraphrasing it. Rewrite only these fields, preserving the same characters, clothing continuity, action, setting, and rendering-neutral intent:\n\n' .. table.concat(repairFields, '\n'))
   end
 end
 
@@ -593,7 +605,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.3-krea2"
+        data["character_version"] = "4.4.4-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

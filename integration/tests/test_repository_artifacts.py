@@ -23,15 +23,15 @@ HOOK_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.3 module artifact."""
+    """Return the single published Krea2 4.4.4 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.3" in path.name
+        if "Krea2 4.4.4" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.3 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.4 module, found {matches}")
     return matches[0]
 
 
@@ -57,13 +57,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertTrue(any(link[1:5] == [206, 0, 297, 0] for link in workflow["links"]))
         self.assertTrue(any(link[1:5] == [297, 0, 204, 0] for link in workflow["links"]))
 
-    def test_module_is_valid_positive_only_krea2_443_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_444_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.3")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.4")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -81,6 +81,14 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("[[KREA2_CHARACTER:", entries["lb-xnai.gen"])
         self.assertIn("[[KREA2_MULTI_CHARACTER]]", entries["lb-xnai.gen"])
         self.assertIn("character_count", entries["lb-xnai.lb.onValidate"])
+        self.assertIn(
+            "Repair only the underspecified prose fields",
+            entries["lb-xnai.lb.onValidate"],
+        )
+        self.assertIn(
+            "Copy every field not listed below exactly",
+            entries["lb-xnai.lb.onValidate"],
+        )
         self.assertIn("one to three identifiable characters", entries["lb-xnai.lb"].lower())
         self.assertIn("dialogue, eye contact, touch, confrontation", entries["lb-xnai.lb"].lower())
         self.assertIn("undeclared identifiable person beyond `character_count`", entries["lb-xnai.lb"])
