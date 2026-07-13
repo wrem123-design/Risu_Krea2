@@ -75,9 +75,13 @@ saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
 The 4.4.22 output hook removes malformed descriptors before any ComfyUI request,
 converts a valid disabled key visual into an ordinary scene, and asks the auxiliary
-model twice for every missing descriptor. Only when both candidates declare two or
-three visible characters but provide fewer identity records, it makes one additional
-identity-cardinality repair request. The repair contributes only the corrected
+model twice for every missing descriptor. When a candidate declares two or three
+visible characters but provides fewer identity records, it can make two focused
+identity-cardinality repair requests. Each repair receives the rejected descriptor,
+its existing identity records, all five prose fields, the selected story, canonical
+profiles, and the temporary-extra registry. A visible story character that is absent
+from `lb-xnai.lb.extra` is emitted with the exact story name and `source=extra`; adding
+that character to the lorebook is not required. The repair contributes only the corrected
 `identities` list; the already valid appearance, outfit, background, composition,
 details, name, and slot remain unchanged. It no longer fills the image count by cloning
 one scene. A rejected focused retry feeds its exact structural, duplicate, slot, or

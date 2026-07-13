@@ -67,6 +67,8 @@ Never substitute a listed canonical character for an unlisted named person who i
 
 For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and equal both the visible identifiable character count and the number of identity records. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the single lorebook alias matching the story and source `lorebook`. Unlisted people use source `extra`, the exact story spelling as their display name, and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. A one-character descriptor emits its focal name to the Hooking Manager; only an exact configured alias activates a LoRA, while unmapped extras safely bypass it. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
 
+Before writing a descriptor, silently enumerate every visible identifiable participant in the selected moment. Cardinality is absolute: one visible person requires `character_count: 1` and exactly one identity record; two visible people require `character_count: 2` and exactly two distinct identity records; three visible people require `character_count: 3` and exactly three distinct identity records. Every person named or visibly described in appearance, outfit, composition, or details must have one corresponding identity. Never omit a visible participant or lower `character_count` because that person is absent from the lorebook; create a `source: extra` identity with the exact story name instead.
+
 1. `appearance` (at least 30 words): name and describe every identifiable participant using fixed age category, skin, build, face shape, eyes, brows, nose, lips, hair, and permanent marks actually supplied by the profiles or story. Keep descriptions person-specific and do not invent conflicting identity traits merely to increase length.
 2. `outfit` (at least 35 words): describe the exact current clothing and accessories of every visible participant, including color, cut, fit, layers, fabric, fasteners, footwear, and continuity. A completed outfit change fully replaces the prior outfit.
 3. `background` (at least 40 words): describe location, architecture, furniture, props, time, weather, depth, and spatial arrangement. Do not add identifiable background people beyond the declared `character_count`.
@@ -82,7 +84,7 @@ JOB_INSTRUCTIONS = """Plan the requested number of richly detailed Krea2 illustr
 FORMAT_CONTRACT = """<lb-xnai>
 scenes[n]:
   - name: ...
-    character_count: 1
+    character_count: n
     identities[n]:
       - identity_key: ...
         name: ...
@@ -96,7 +98,7 @@ scenes[n]:
     slot: ...
 keyvis:
   name: ...
-  character_count: 1
+  character_count: n
   identities[n]:
     - identity_key: ...
       name: ...
@@ -108,6 +110,8 @@ keyvis:
   composition: ...
   details: ...
 </lb-xnai>
+
+Cardinality examples: `character_count: 1` requires one identity record, `character_count: 2` requires two distinct identity records, and `character_count: 3` requires three distinct identity records. Replace `n` with the actual integer and emit exactly that many list items.
 
 `keyvis` presence follows the module setting. The combined count of scenes and keyvis must match the module's requested image count. Each descriptor represents one to three identifiable characters, with `name` designating the primary focal character. Every prose field must be a detailed English natural-language string."""
 
@@ -584,6 +588,31 @@ local function identityCardinalityMismatch(desc)
   return expected, actual
 end
 
+local function descriptorRepairSnapshot(desc)
+  desc = normalizeDescriptorShape(desc)
+  if type(desc) ~= 'table' then return '(unavailable)' end
+  local lines = {
+    'name: ' .. trimText(desc.name),
+    'character_count: ' .. tostring(desc.character_count or ''),
+    'Existing identity records:',
+  }
+  if type(desc.identities) == 'table' and #desc.identities > 0 then
+    for index, identity in ipairs(desc.identities) do
+      table.insert(lines, '  ' .. tostring(index) .. '. identity_key: ' ..
+        trimText(identity.identity_key) .. ' | name: ' .. trimText(identity.name) ..
+        ' | source: ' .. trimText(identity.source) .. ' | appearance: ' ..
+        trimText(identity.appearance))
+    end
+  else
+    table.insert(lines, '  (none)')
+  end
+  for _, field in ipairs(requiredDescriptorFields) do
+    table.insert(lines, field .. ': ' .. trimText(desc[field]))
+  end
+  if desc.slot ~= nil then table.insert(lines, 'slot: ' .. tostring(desc.slot)) end
+  return table.concat(lines, '\n')
+end
+
 local function identityCardinalityRepairNote(desc)
   local expected, actual = identityCardinalityMismatch(desc)
   if not expected then return '' end
@@ -599,7 +628,10 @@ local function identityCardinalityRepairNote(desc)
     'Keep character_count at ' .. tostring(expected) .. ' and return exactly ' ..
       tostring(expected) .. ' identity records, one for every visible named person in the selected story moment.',
     'Use the canonical lorebook appearance when available; otherwise use the exact story name and source extra.',
+    'Match every visible name against the canonical profiles and temporary extra registry supplied below. Never substitute a familiar canonical character for an unlisted story person.',
     'Return the complete descriptor, but copy name, appearance, outfit, background, composition, details, and slot without changing them.',
+    'Rejected descriptor snapshot:',
+    descriptorRepairSnapshot(desc),
     'Required identity records:',
     table.concat(identityRows, '\n'),
   }, '\n')
@@ -906,7 +938,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
   if wantKeyVisual then
     outputShape = [[keyvis:
   name: ...
-  character_count: 1
+  character_count: n
   identities[n]:
     - identity_key: ...
       name: ...
@@ -920,7 +952,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
   else
     outputShape = [[scenes[1]:
   - name: ...
-    character_count: 1
+    character_count: n
     identities[n]:
       - identity_key: ...
         name: ...
@@ -953,12 +985,12 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
   local lastFailure = '보조 모델이 유효한 이미지 설명을 반환하지 않았습니다.'
   local lastCandidate = nil
   local identityRepairBase = nil
-  for attempt = 1, 3 do
+  for attempt = 1, 4 do
     local retryNote = ''
     if attempt == 2 then
       retryNote = '\n\nPrevious candidate rejection: ' .. lastFailure ..
         '\nCorrect exactly that rejection while preserving every already valid image descriptor. Return one complete replacement descriptor only.'
-    elseif attempt == 3 then
+    elseif attempt >= 3 then
       local cardinalityNote = identityCardinalityRepairNote(identityRepairBase)
       if cardinalityNote == '' then break end
       retryNote = '\n\nPrevious candidate rejection: ' .. lastFailure ..
@@ -974,7 +1006,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
       if not candidate then
         lastFailure = '응답에서 해석 가능한 단일 이미지 설명 구조를 찾지 못했습니다.'
       else
-        if attempt == 3 then
+        if attempt >= 3 then
           candidate = mergeIdentityCardinalityRepair(identityRepairBase, candidate)
         end
         if not identityRepairBase and identityCardinalityMismatch(candidate) then

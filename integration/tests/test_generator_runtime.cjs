@@ -212,44 +212,44 @@ assert(lastPromptText:find('outfit', 1, true),
 
 local oneOfTwoIdentities = {
   scenes = {{
-    name = '강혜정', character_count = 2,
+    name = '성진', character_count = 2,
     identities = {{
-      identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
-      appearance = '강혜정 stable physical appearance'
+      identity_key = 'Oh Deok-gu', name = '덕규', source = 'lorebook',
+      appearance = '오덕규 canonical physical appearance'
     }},
-    appearance = '강혜정 and 송희진 have clearly distinct complete physical appearances',
-    outfit = '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
-    background = 'a quiet hotel lobby with warm lamps and polished stone walls',
-    composition = '강혜정 and 송희진 stand face to face during a tense private conversation',
-    details = 'realistic skin texture and soft practical lighting preserve both faces', slot = 0
+    appearance = '성진 and 덕규 have clearly distinct complete physical appearances',
+    outfit = '성진 wears a plain shirt while 덕규 wears a stretched anime T-shirt',
+    background = 'a humid underground workshop filled with computers and loose components',
+    composition = '성진 points at the antigravity sphere while 덕규 turns toward him from a chair',
+    details = 'blue monitor light preserves both faces and the reflective metal sphere', slot = 0
   }}
 }
 local repairedTwoIdentities = {
   scenes = {{
-    name = '강혜정', character_count = 2,
+    name = '성진', character_count = 2,
     identities = {
       {
-        identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
-        appearance = '강혜정 stable physical appearance'
+        identity_key = 'extra-seongjin-1', name = '성진', source = 'extra',
+        appearance = '성진 stable physical appearance established from the story'
       },
       {
-        identity_key = 'extra-song-heejin-1', name = '송희진', source = 'extra',
-        appearance = '송희진 stable physical appearance'
+        identity_key = 'Oh Deok-gu', name = '덕규', source = 'lorebook',
+        appearance = '오덕규 canonical physical appearance'
       }
     },
-    appearance = '강혜정 and 송희진 have clearly distinct complete physical appearances',
-    outfit = '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
-    background = 'a quiet hotel lobby with warm lamps and polished stone walls',
-    composition = '강혜정 and 송희진 stand face to face during a tense private conversation',
-    details = 'realistic skin texture and soft practical lighting preserve both faces', slot = 0
+    appearance = '성진 and 덕규 have clearly distinct complete physical appearances',
+    outfit = '성진 wears a plain shirt while 덕규 wears a stretched anime T-shirt',
+    background = 'a humid underground workshop filled with computers and loose components',
+    composition = '성진 points at the antigravity sphere while 덕규 turns toward him from a chair',
+    details = 'blue monitor light preserves both faces and the reflective metal sphere', slot = 0
   }}
 }
 local changedOneOfTwoIdentities = {
   scenes = {{
-    name = '강혜정', character_count = 2,
+    name = '성진', character_count = 2,
     identities = {{
-      identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
-      appearance = '강혜정 stable physical appearance'
+      identity_key = 'Oh Deok-gu', name = '덕규', source = 'lorebook',
+      appearance = '오덕규 canonical physical appearance'
     }},
     appearance = 'an unwanted rewritten appearance paragraph',
     outfit = 'an unwanted rewritten outfit paragraph',
@@ -260,18 +260,36 @@ local changedOneOfTwoIdentities = {
 }
 queue = { oneOfTwoIdentities, changedOneOfTwoIdentities, repairedTwoIdentities }
 local cardinalityCandidate, cardinalityFailure = gen.requestOneDescriptor(
-  'test', { scenes = {} }, '강혜정과 송희진은 호텔 로비에서 마주 보고 대화했다.', false)
+  'test', { scenes = {} },
+  '성진은 덕규가 앉은 의자 앞으로 다가가 반중력 구체를 가리켰다. 그 천재의 이름은 오덕규였다.', false)
 assert(cardinalityCandidate and #cardinalityCandidate.identities == 2,
   'an identity-count-only third repair did not recover the two-person scene')
 assert(cardinalityCandidate.outfit ==
-  '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
+  '성진 wears a plain shirt while 덕규 wears a stretched anime T-shirt',
   "the identity-only repair did not preserve the first candidate's valid prose")
+assert(cardinalityCandidate.identities[1].name == '성진' and
+  cardinalityCandidate.identities[1].source == 'extra',
+  'the unlisted story participant was not repaired as a source extra identity')
+assert(cardinalityCandidate.identities[2].name == '덕규' and
+  cardinalityCandidate.identities[2].source == 'lorebook',
+  'the canonical participant was not retained as a lorebook identity')
 assert(cardinalityFailure == '',
   'a successful identity-count-only repair retained a failure state')
 assert(lastPromptText:find('Identity cardinality repair:', 1, true),
   'the third repair did not receive the identity-cardinality-specific instruction')
 assert(lastPromptText:find('exactly 2 identity records', 1, true),
   'the identity-cardinality retry did not state the required record count')
+assert(lastPromptText:find('Rejected descriptor snapshot:', 1, true),
+  'the identity-cardinality retry did not include the rejected descriptor')
+assert(lastPromptText:find('오덕규 canonical physical appearance', 1, true),
+  'the retry omitted the already valid canonical identity from the rejected descriptor')
+assert(lastPromptText:find(
+  '성진 points at the antigravity sphere while 덕규 turns toward him from a chair', 1, true),
+  'the retry omitted the two-person composition used to identify the missing person')
+assert(lastPromptText:find('Canonical character appearances:', 1, true),
+  'the identity repair did not retain canonical profile context')
+assert(lastPromptText:find('Previously established temporary extras:', 1, true),
+  'the identity repair did not retain temporary extra context')
 return true
 `;
 
