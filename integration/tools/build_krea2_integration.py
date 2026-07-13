@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.17"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4417"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.18"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4418"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -642,12 +642,24 @@ local function storyWindowForSlot(fullChatContent, slot)
   return table.concat(window, '\n')
 end
 
+local function koreanGivenName(value)
+  local text = trimText(value)
+  local ok, length = pcall(utf8.len, text)
+  if not ok or not length or length < 3 or length > 4 then return '' end
+  for _, codepoint in utf8.codes(text) do
+    if codepoint < 0xAC00 or codepoint > 0xD7A3 then return '' end
+  end
+  local offset = utf8.offset(text, 2)
+  return offset and text:sub(offset) or ''
+end
+
 local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
   if not descriptorReady(descriptor) then return false end
   local slot = tonumber(descriptor.slot)
   if not slot then return false end
   local normalizedWindow = normalizeIdentity(storyWindowForSlot(fullChatContent, slot))
   if normalizedWindow == '' then return false end
+  local normalizedStory = normalizeIdentity(prelude.removeAllNodes(fullChatContent or ''))
   local canonicalAliases = canonicalLorebookAliasMap(triggerId)
   for _, identity in ipairs(descriptor.identities or {}) do
     local name = trimText(identity.name)
@@ -655,16 +667,22 @@ local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
     local aliasGroup = canonicalAliases[key]
       or canonicalAliases[normalizeIdentity(identity.identity_key)]
     local found = false
-    if aliasGroup then
-      for _, alias in ipairs(aliasGroup) do
-        local normalizedAlias = normalizeIdentity(alias)
-        if normalizedAlias ~= '' and normalizedWindow:find(normalizedAlias, 1, true) then
-          found = true
-          break
-        end
+    local candidates = aliasGroup or { name }
+    for _, alias in ipairs(candidates) do
+      local normalizedAlias = normalizeIdentity(alias)
+      if normalizedAlias ~= '' and normalizedWindow:find(normalizedAlias, 1, true) then
+        found = true
+        break
       end
-    elseif key ~= '' and normalizedWindow:find(key, 1, true) then
-      found = true
+      local givenName = koreanGivenName(alias)
+      local normalizedGivenName = normalizeIdentity(givenName)
+      if normalizedAlias ~= ''
+          and normalizedGivenName ~= ''
+          and normalizedStory:find(normalizedAlias, 1, true)
+          and normalizedWindow:find(normalizedGivenName, 1, true) then
+        found = true
+        break
+      end
     end
     if not found then return false end
   end
@@ -1400,7 +1418,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.17-krea2"
+        data["character_version"] = "4.4.18-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

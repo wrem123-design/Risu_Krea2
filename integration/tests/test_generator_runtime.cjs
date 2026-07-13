@@ -131,7 +131,11 @@ local realExtra = {
   background = 'quiet hotel lounge', composition = 'seated conversation portrait',
   details = 'soft practical lighting and realistic material detail', slot = 0
 }
-local groundingStory = '강혜정은 창가에 앉아 송희진을 기다렸다.\\n\\n송희진이 라운지로 들어왔다.\\n\\n두 사람은 서로를 바라봤다.'
+local groundingStory = table.concat({
+  '강혜정은 창가에 앉아 송희진을 기다렸다.', '송희진이 라운지로 들어왔다.',
+  '두 사람은 서로를 바라봤다.', 'filler four', 'filler five', 'filler six',
+  '오덕규의 기술에 관한 소문이 나중에 언급되었다.'
+}, '\\n\\n')
 assert(gen.descriptorGroundedAtSlot('test', wrongKnownCharacter, groundingStory) == false,
   'a canonical character absent from the selected scene was accepted')
 assert(gen.descriptorGroundedAtSlot('test', realExtra, groundingStory) == true,
@@ -140,6 +144,13 @@ assert(gen.isCanonicalLorebookName('test', 'Song Hee-jin') == true,
   'comma-separated English lorebook aliases were not recognized')
 assert(gen.isCanonicalLorebookName('test', '송희진') == true,
   'comma-separated Korean lorebook aliases were not recognized')
+local shortNameStory = table.concat({
+  '송희진은 라운지에 도착했다.', 'filler two', 'filler three', 'filler four',
+  'filler five', '희진은 은색 포크를 집어 들었다.', 'filler seven', 'filler eight'
+}, '\\n\\n')
+local shortNameScene = ${descriptor('Song Hee-jin', 'ivory jacket', 'private lounge', 'medium seated portrait', 5)}
+assert(gen.descriptorGroundedAtSlot('test', shortNameScene, shortNameStory) == true,
+  'a Korean full name introduced earlier did not ground its nearby given-name mention')
 return true
 `;
 
@@ -151,7 +162,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.17.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.18.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));
