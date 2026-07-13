@@ -25,6 +25,17 @@
 `OPTIONS` 사전 요청과 `Authorization` 헤더를 허용합니다. `/prompt`, `/history`,
 `/view`가 포트 또는 터널 주소를 거쳐 호출될 때 CORS로 차단되는 문제를 방지합니다.
 
+`patches/0004-slim-krea2-operator-console.patch`는 후킹 매니저를 Krea2 삽화 전용으로
+경량화합니다. 공지·알림, 에셋 생성/업로드, 포즈 편집, 자동 매칭, LoRA 학습처럼
+현재 파이프라인과 무관한 백엔드와 UI를 제거하고 다음 세 화면만 유지합니다.
+
+- 생성 기록: 프롬프트 확인, 재생성, 수정, 예약
+- Krea2 설정: 해상도 프리셋/수동 입력, 프리셋 라우팅, 캐릭터 LoRA
+- 운영·진단: 준비 상태, 삽화 큐, 필수 설정, 최근 로그
+
+외부 접속에 사용하는 Cloudflare 공유 시작/상태/종료와 주소 복사는 전역 헤더에
+그대로 유지됩니다. 삭제 판단 근거는 `FEATURE_INVENTORY.md`에 기록되어 있습니다.
+
 ## 적용
 
 Hooking Manager 저장소 루트에서 실행합니다.
@@ -33,15 +44,12 @@ Hooking Manager 저장소 루트에서 실행합니다.
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0001-krea2-character-lora-routing.patch
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0002-randomize-krea2-workflow-seeds.patch
 git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0003-pocketrisu-browser-cors.patch
+git apply E:\Chatbot\Risu_Krea2\hooking_manager\patches\0004-slim-krea2-operator-console.patch
 ```
 
-로컬 `config.json`에는 다음 키를 추가합니다. 실제 환경에 맞는 원본 Krea2 워크플로 경로를 사용하세요.
-
-```json
-{
-  "krea2_lora_catalog_source_path": "E:\\Chatbot\\comfypack\\ComfyUI_windows_portable\\ComfyUI\\user\\default\\workflows\\Krea2_turbo_chatbot.json"
-}
-```
+로컬 `config.json`은 `config.krea2.example.json`을 참고합니다. 실제 환경에 맞는
+실행 워크플로와 LoRA 카탈로그 원본 경로를 사용하세요. 모델이나 ComfyUI 자체는
+이 저장소에 포함하지 않습니다.
 
 `config.json`과 `krea2_character_lora_map.json`은 컴퓨터별 로컬 상태이므로 이 저장소에 커밋하지 않습니다. 매핑 파일은 캐릭터 연결, 프리셋별 LoRA 동작, 해상도 오버라이드를 함께 보관합니다.
 
@@ -61,3 +69,9 @@ python -m unittest discover -s tests -v
 ```
 
 후킹매니저를 다시 시작한 뒤 `http://127.0.0.1:8189/api/krea2_lora/config`에서 카탈로그가 반환되는지 확인합니다.
+
+## 실행
+
+ComfyUI를 먼저 FlashAttention 배치 파일로 실행한 뒤 후킹 매니저의 `run_en.bat`을
+실행합니다. 관리자 화면은 `http://127.0.0.1:8189/`입니다. 원격 사용이 필요하면
+상단 **공유 시작**을 누르고 표시된 주소를 PocketRisu의 ComfyUI 요청 URL로 사용합니다.
