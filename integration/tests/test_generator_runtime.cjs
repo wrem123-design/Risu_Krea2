@@ -36,6 +36,7 @@ local queue = {
 local sceneSelectionValue = '1'
 local states = {}
 local chatVars = {}
+local capturedImagePrompt = ''
 function getGlobalVar(_, name)
   if name == 'toggle_lb-xnai.imageCount' then return '4' end
   if name == 'toggle_lb-xnai.keyVisual' then return '2' end
@@ -46,6 +47,10 @@ function getChatVar(_, name) return chatVars[name] or '' end
 function setChatVar(_, name, value) chatVars[name] = value end
 function getState(_, name) return states[name] end
 function setState(_, name, value) states[name] = value end
+function generateImage(_, positive)
+  capturedImagePrompt = positive
+  return { await = function() return '{{inlay::identity-test}}' end }
+end
 local lastPromptText = ''
 function axLLM(_, prompt)
   lastPromptText = prompt[2].content
@@ -61,6 +66,18 @@ Canonical appearance
 
 ### Stella, Song Hee-jin / 스텔라, 송희진
 Shared aliases]] }
+    end
+    if name == '프리셋 1' then
+      return { content = [[[Positive]
+{appearance}
+
+{outfit}
+
+{background}
+
+{composition}
+
+{details}]] }
     end
     return nil
   end,
@@ -290,6 +307,53 @@ assert(lastPromptText:find('Canonical character appearances:', 1, true),
   'the identity repair did not retain canonical profile context')
 assert(lastPromptText:find('Previously established temporary extras:', 1, true),
   'the identity repair did not retain temporary extra context')
+
+local canonicalHelmetScene = {
+  name = 'The Frankenstein Helmet', character_count = 1,
+  identities = {{
+    identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+    appearance = 'Korean man with a slightly chubby physique, a round face, thick-rimmed round glasses, and messy black hair.'
+  }},
+  appearance = 'Oh Deok-gu leans over the desk with an intensely focused expression while soldering.',
+  outfit = 'an oversized stained grey cotton t-shirt',
+  background = 'a cluttered warehouse workshop filled with electronic scrap',
+  composition = 'close-up shot of his concentrated face and hands working on a helmet',
+  details = 'realistic skin texture, solder smoke, and shallow optical depth of field', slot = 49
+}
+local generated = gen.generate('test', canonicalHelmetScene)
+assert(generated == '{{inlay::identity-test}}', 'the canonical appearance test did not reach image generation')
+assert(capturedImagePrompt:find('slightly chubby physique', 1, true),
+  'the final prompt dropped the immutable identity appearance')
+assert(capturedImagePrompt:find('thick-rimmed round glasses', 1, true),
+  'the final prompt dropped canonical face accessories')
+assert(capturedImagePrompt:find('intensely focused expression', 1, true),
+  'the final prompt dropped useful scene-level appearance state')
+assert(capturedImagePrompt:find('[[KREA2_CHARACTER:Oh Deok-gu]]', 1, true),
+  'the single-person route used the scene title instead of the identity name')
+assert(not capturedImagePrompt:find('[[KREA2_CHARACTER:The Frankenstein Helmet]]', 1, true),
+  'the single-person route retained the invalid scene-title identity')
+
+local multiIdentityScene = {
+  name = 'The Feast of the Engineers', character_count = 2,
+  identities = {
+    { identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook', appearance = 'canonical Deok-gu appearance' },
+    { identity_key = 'seong_jin', name = '성진', source = 'extra', appearance = 'stable Seong-jin appearance' }
+  },
+  appearance = 'both men eat with contrasting expressions',
+  outfit = 'Deok-gu wears a white t-shirt and 성진 wears a dark hoodie',
+  background = 'a dim warehouse workshop',
+  composition = 'wide two-person shot',
+  details = 'realistic practical lighting', slot = 35
+}
+gen.generate('test', multiIdentityScene)
+assert(capturedImagePrompt:find('canonical Deok-gu appearance', 1, true),
+  'the multi-person final prompt dropped the first identity appearance')
+assert(capturedImagePrompt:find('stable Seong-jin appearance', 1, true),
+  'the multi-person final prompt dropped the second identity appearance')
+assert(capturedImagePrompt:find('[[KREA2_MULTI_CHARACTER]]', 1, true),
+  'multi-person LoRA suppression marker changed')
+assert(not capturedImagePrompt:find('[[KREA2_CHARACTER:', 1, true),
+  'a character LoRA route leaked into a multi-person prompt')
 return true
 `;
 

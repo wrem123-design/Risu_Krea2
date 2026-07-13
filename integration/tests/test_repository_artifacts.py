@@ -87,7 +87,7 @@ class RepositoryArtifactTests(unittest.TestCase):
             "wordCount(outfit) < minimumWords.outfit",
             builder.GENERATOR_LUA,
         )
-        self.assertIn("or appearance == ''", builder.GENERATOR_LUA)
+        self.assertIn("or sceneAppearance == ''", builder.GENERATOR_LUA)
         self.assertIn("or details == ''", builder.GENERATOR_LUA)
 
     def test_module_generation_controls_are_wired_to_prompt_and_validator(self) -> None:
@@ -325,6 +325,15 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("Cardinality examples:", entries["lb-xnai.lb.format"])
         self.assertIn("Rejected descriptor snapshot:", entries["lb-xnai.gen"])
         self.assertIn("Existing identity records:", entries["lb-xnai.gen"])
+        self.assertIn("identityAppearanceLines", entries["lb-xnai.gen"])
+        self.assertIn(
+            "Current scene appearance, expression, and temporary state:",
+            entries["lb-xnai.gen"],
+        )
+        self.assertIn(
+            "trimText(desc.identities[1].name)",
+            entries["lb-xnai.gen"],
+        )
         self.assertNotIn("or another identifiable person", entries["lb-xnai.lb"])
         self.assertNotIn("ensurePhotorealistic", entries["lb-xnai.gen"])
         self.assertNotIn("details must explicitly include photorealistic", entries["lb-xnai.lb.onValidate"].lower())

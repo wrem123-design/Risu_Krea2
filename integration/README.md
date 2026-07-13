@@ -128,6 +128,11 @@ may bootstrap without a canonical alias, then enters the chat-scoped temporary r
 successful generation. A known lorebook identity cannot bypass grounding by claiming `extra`.
 Single-person extras still emit a routing name, but Hooking Manager applies a LoRA only
 when that exact alias was explicitly configured; ordinary unmapped extras therefore bypass it.
+The final Krea2 appearance block is assembled from every descriptor identity's immutable
+`name` and `appearance` record before scene-specific expression or temporary-state prose is
+appended. This prevents a weak scene-level `appearance` field from replacing canonical or
+remembered-extra traits. Single-person routing uses the sole identity's name rather than the
+descriptor title, while multi-person scenes continue to suppress identity LoRAs.
 
 ## Workflow contract
 

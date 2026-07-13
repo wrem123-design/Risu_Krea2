@@ -1129,7 +1129,7 @@ local function buildPresetPrompt(triggerId, desc)
 
   local name = trimText(desc.name)
   local characterCount = tonumber(desc.character_count)
-  local appearance = trimText(desc.appearance)
+  local sceneAppearance = trimText(desc.appearance)
   local outfit = trimText(desc.outfit)
   local background = trimText(desc.background)
   local composition = trimText(desc.composition)
@@ -1140,7 +1140,7 @@ local function buildPresetPrompt(triggerId, desc)
       or characterCount % 1 ~= 0
       or characterCount < 1
       or characterCount > 3
-      or appearance == ''
+      or sceneAppearance == ''
       or outfit == ''
       or background == ''
       or composition == ''
@@ -1148,9 +1148,16 @@ local function buildPresetPrompt(triggerId, desc)
     return nil
   end
 
-  if name ~= '' and not appearance:lower():find(name:lower(), 1, true) then
-    appearance = name .. ': ' .. appearance
+  local identityAppearanceLines = {}
+  for _, identity in ipairs(desc.identities or {}) do
+    local identityName = trimText(identity.name)
+    local identityAppearance = trimText(identity.appearance)
+    if identityName == '' or identityAppearance == '' then return nil end
+    table.insert(identityAppearanceLines, identityName .. ': ' .. identityAppearance)
   end
+  if #identityAppearanceLines ~= characterCount then return nil end
+  local appearance = table.concat(identityAppearanceLines, '\n') ..
+    '\nCurrent scene appearance, expression, and temporary state: ' .. sceneAppearance
 
   positive = safeReplace(positive, '{appearance}', appearance)
   positive = safeReplace(positive, '{outfit}', outfit)
@@ -1169,7 +1176,8 @@ local function buildPresetPrompt(triggerId, desc)
   positive = positive:gsub('\n\n\n+', '\n\n')
 
   if characterCount == 1 and name ~= '' then
-    local routingName = name:gsub('[%[%]\r\n]', ' '):gsub('%s+', ' ')
+    local routingName = trimText(desc.identities[1].name)
+      :gsub('[%[%]\r\n]', ' '):gsub('%s+', ' ')
     positive = '[[KREA2_CHARACTER:' .. routingName .. ']]\n' .. positive
   else
     positive = '[[KREA2_MULTI_CHARACTER]]\n' .. positive
