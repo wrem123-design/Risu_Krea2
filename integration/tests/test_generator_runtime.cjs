@@ -16,9 +16,9 @@ const builder = fs.readFileSync(builderPath, 'utf8');
 const match = /GENERATOR_LUA = r"""([\s\S]*?)"""\s+def _as_object/.exec(builder);
 if (!match) throw new Error('GENERATOR_LUA not found');
 
-const descriptor = (name, outfit, background, composition, slot = 0) => `{
+const descriptor = (name, outfit, background, composition, slot = 0, source = 'extra') => `{
   name = '${name}', character_count = 1,
-  identities = {{ identity_key = '${name}', name = '${name}', source = 'lorebook', appearance = '${name} appearance' }},
+  identities = {{ identity_key = '${name}', name = '${name}', source = '${source}', appearance = '${name} appearance' }},
   appearance = '${name} detailed appearance', outfit = '${outfit}',
   background = '${background}', composition = '${composition}',
   details = '${name} distinct rendering details', slot = ${slot}
@@ -123,7 +123,8 @@ local spread = gen.completeResponseImageCount('test', clustered, longStory)
 assert(spread.scenes[1].name == 'Spread A', 'ordinal top cluster was not rebuilt')
 assert(spread.scenes[2].slot == 5 and spread.scenes[3].slot == 8 and spread.scenes[4].slot == 10)
 
-local wrongKnownCharacter = ${descriptor('Oh Deok-gu', 'gray suit', 'hotel lounge', 'medium portrait', 0)}
+local wrongKnownCharacter = ${descriptor('Oh Deok-gu', 'gray suit', 'hotel lounge', 'medium portrait', 0, 'lorebook')}
+local wrongKnownCharacterAsExtra = ${descriptor('Oh Deok-gu', 'gray suit', 'hotel lounge', 'medium portrait', 0, 'extra')}
 local realExtra = {
   name = '강혜정', character_count = 1,
   identities = {{ identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra', appearance = '강혜정 fixed physical appearance' }},
@@ -138,17 +139,24 @@ local groundingStory = table.concat({
 }, '\\n\\n')
 assert(gen.descriptorGroundedAtSlot('test', wrongKnownCharacter, groundingStory) == false,
   'a canonical character absent from the selected scene was accepted')
+assert(gen.descriptorGroundedAtSlot('test', wrongKnownCharacterAsExtra, groundingStory) == false,
+  'a canonical character bypassed grounding by claiming source extra')
 assert(gen.descriptorGroundedAtSlot('test', realExtra, groundingStory) == true,
   'an unlisted named extra copied from the story was rejected')
+local provisionalExtra = ${descriptor('Kang Hye-jeong', 'cream jacket', 'hotel lounge', 'medium portrait', 0, 'extra')}
+assert(gen.descriptorGroundedAtSlot('test', provisionalExtra, groundingStory) == true,
+  'a complete first-appearance extra was blocked before it could enter temporary memory')
 assert(gen.isCanonicalLorebookName('test', 'Song Hee-jin') == true,
   'comma-separated English lorebook aliases were not recognized')
 assert(gen.isCanonicalLorebookName('test', '송희진') == true,
   'comma-separated Korean lorebook aliases were not recognized')
+assert(gen.isCanonicalLorebookName('test', 'Oh Deok-gu') == true,
+  'a canonical profile using a level-two lorebook heading was not recognized')
 local shortNameStory = table.concat({
   '송희진은 라운지에 도착했다.', 'filler two', 'filler three', 'filler four',
   'filler five', '희진은 은색 포크를 집어 들었다.', 'filler seven', 'filler eight'
 }, '\\n\\n')
-local shortNameScene = ${descriptor('Song Hee-jin', 'ivory jacket', 'private lounge', 'medium seated portrait', 5)}
+local shortNameScene = ${descriptor('Song Hee-jin', 'ivory jacket', 'private lounge', 'medium seated portrait', 5, 'lorebook')}
 assert(gen.descriptorGroundedAtSlot('test', shortNameScene, shortNameStory) == true,
   'a Korean full name introduced earlier did not ground its nearby given-name mention')
 return true
@@ -162,7 +170,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.18.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.19.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));

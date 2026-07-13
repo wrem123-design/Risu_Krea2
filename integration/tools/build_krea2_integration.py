@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.18"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4418"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.19"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4419"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -370,7 +370,7 @@ local function canonicalLorebookAliasMap(triggerId)
   local book = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
   local content = book and book.content or ''
   for line in content:gmatch('[^\r\n]+') do
-    local heading = line:match('^###+%s+(.+)$')
+    local heading = line:match('^##+%s+(.+)$')
     if heading then
       local english, translated = heading:match('^%s*(.-)%s*/%s*(.-)%s*$')
       local group = {}
@@ -419,6 +419,14 @@ local function updateExtraRegistry(triggerId, response)
   local registry = getState(triggerId, 'lb-xnai-extra-registry-v1') or {}
   if type(registry) ~= 'table' then registry = {} end
   local canonicalNames = canonicalLorebookNames(triggerId)
+  for index = #registry, 1, -1 do
+    local saved = registry[index]
+    if type(saved) ~= 'table'
+        or canonicalNames[normalizeIdentity(saved.name)]
+        or canonicalNames[normalizeIdentity(saved.identity_key)] then
+      table.remove(registry, index)
+    end
+  end
   local descriptors = {}
   if response.keyvis then table.insert(descriptors, response.keyvis) end
   for _, descriptor in ipairs(response.scenes or {}) do table.insert(descriptors, descriptor) end
@@ -514,6 +522,15 @@ local function descriptorReady(desc)
   local characterCount = tonumber(desc.character_count)
   if not characterCount or characterCount < 1 or characterCount > 3 then return false end
   if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then return false end
+  for _, identity in ipairs(desc.identities) do
+    if type(identity) ~= 'table'
+        or trimText(identity.identity_key) == ''
+        or trimText(identity.name) == ''
+        or trimText(identity.appearance) == ''
+        or (identity.source ~= 'lorebook' and identity.source ~= 'extra') then
+      return false
+    end
+  end
   for _, field in ipairs(requiredDescriptorFields) do
     if trimText(desc[field]) == '' then return false end
   end
@@ -666,9 +683,10 @@ local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
     local key = normalizeIdentity(name)
     local aliasGroup = canonicalAliases[key]
       or canonicalAliases[normalizeIdentity(identity.identity_key)]
-    local found = false
+    local found = identity.source == 'extra' and aliasGroup == nil
     local candidates = aliasGroup or { name }
     for _, alias in ipairs(candidates) do
+      if found then break end
       local normalizedAlias = normalizeIdentity(alias)
       if normalizedAlias ~= '' and normalizedWindow:find(normalizedAlias, 1, true) then
         found = true
@@ -1418,7 +1436,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.18-krea2"
+        data["character_version"] = "4.4.19-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
