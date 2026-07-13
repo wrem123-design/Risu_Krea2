@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.19"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4419"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.20"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4420"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -409,7 +409,7 @@ local function formatExtraRegistry(registry)
   return table.concat(lines, '\n')
 end
 
-local function updateExtraRegistry(triggerId, response)
+local function refreshExtraRegistry(triggerId)
   local enabled = getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemory') or '0'
   if enabled == '1' then
     setState(triggerId, 'lb-xnai-extra-registry-v1', {})
@@ -427,6 +427,19 @@ local function updateExtraRegistry(triggerId, response)
       table.remove(registry, index)
     end
   end
+  local limit = math.floor(tonumber(getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemoryLimit')) or 20)
+  if limit < 1 then limit = 1 elseif limit > 50 then limit = 50 end
+  while #registry > limit do table.remove(registry, 1) end
+  setState(triggerId, 'lb-xnai-extra-registry-v1', registry)
+  setChatVar(triggerId, 'lb-xnai-extra-registry-prompt', formatExtraRegistry(registry))
+  return registry
+end
+
+local function updateExtraRegistry(triggerId, response)
+  local registry = refreshExtraRegistry(triggerId)
+  local enabled = getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemory') or '0'
+  if enabled == '1' then return registry end
+  local canonicalNames = canonicalLorebookNames(triggerId)
   local descriptors = {}
   if response.keyvis then table.insert(descriptors, response.keyvis) end
   for _, descriptor in ipairs(response.scenes or {}) do table.insert(descriptors, descriptor) end
@@ -448,9 +461,6 @@ local function updateExtraRegistry(triggerId, response)
       end
     end
   end
-  local limit = math.floor(tonumber(getGlobalVar(triggerId, 'toggle_lb-xnai.extraMemoryLimit')) or 20)
-  if limit < 1 then limit = 1 elseif limit > 50 then limit = 50 end
-  while #registry > limit do table.remove(registry, 1) end
   setState(triggerId, 'lb-xnai-extra-registry-v1', registry)
   setChatVar(triggerId, 'lb-xnai-extra-registry-prompt', formatExtraRegistry(registry))
   return registry
@@ -1070,6 +1080,7 @@ return {
   insertSlots = insertSlots,
   locateTargetChat = locateTargetChat,
   persistStateAndHistory = persistStateAndHistory,
+  refreshExtraRegistry = refreshExtraRegistry,
   updateExtraRegistry = updateExtraRegistry,
   validateResponseImageCount = validateResponseImageCount,
   completeResponseImageCount = completeResponseImageCount,
@@ -1360,6 +1371,22 @@ end
     return content
 
 
+def _upgrade_on_input_lua(content: str) -> str:
+    """Refresh temporary identities before the planner prompt is assembled."""
+
+    content = content.replace(
+        "prelude.import(tid, 'lb-xnai.gen')",
+        f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+    )
+    import_anchor = f"local gen = prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')"
+    refresh_call = "gen.refreshExtraRegistry(tid)"
+    if refresh_call not in content:
+        if import_anchor not in content:
+            raise ValueError("Source module input hook cannot refresh the extra registry")
+        content = content.replace(import_anchor, import_anchor + "\n  " + refresh_call, 1)
+    return content
+
+
 def build_module(source: Path, output: Path) -> None:
     """Create a new CCv3 module with the Krea2 natural-language contract."""
 
@@ -1403,10 +1430,7 @@ def build_module(source: Path, output: Path) -> None:
             if name == "lb-xnai.gen":
                 generator_template = copy.deepcopy(entry)
             if name == "lb-xnai.lb.onInput":
-                entry["content"] = str(entry.get("content", "")).replace(
-                    "prelude.import(tid, 'lb-xnai.gen')",
-                    f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
-                )
+                entry["content"] = _upgrade_on_input_lua(str(entry.get("content", "")))
             if name == "lb-xnai.lb.onOutput":
                 entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
             filtered_entries.append(entry)
@@ -1436,7 +1460,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.19-krea2"
+        data["character_version"] = "4.4.20-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
@@ -1531,10 +1555,7 @@ def _build_legacy_module(
         if name == "lb-xnai.gen":
             generator_template = copy.deepcopy(entry)
         if name == "lb-xnai.lb.onInput":
-            entry["content"] = str(entry.get("content", "")).replace(
-                "prelude.import(tid, 'lb-xnai.gen')",
-                f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
-            )
+            entry["content"] = _upgrade_on_input_lua(str(entry.get("content", "")))
         if name == "lb-xnai.lb.onOutput":
             entry["content"] = _upgrade_on_output_lua(str(entry.get("content", "")))
         filtered_lorebook.append(entry)

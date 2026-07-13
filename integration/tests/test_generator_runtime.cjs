@@ -34,13 +34,18 @@ local queue = {
   ${descriptor('Scene D', 'brown jacket', 'apartment hallway', 'low angle arrival shot', 3)}
 }
 local sceneSelectionValue = '1'
+local states = {}
+local chatVars = {}
 function getGlobalVar(_, name)
   if name == 'toggle_lb-xnai.imageCount' then return '4' end
   if name == 'toggle_lb-xnai.keyVisual' then return '2' end
   if name == 'toggle_lb-xnai.sceneSelection' then return sceneSelectionValue end
   return ''
 end
-function getChatVar() return '' end
+function getChatVar(_, name) return chatVars[name] or '' end
+function setChatVar(_, name, value) chatVars[name] = value end
+function getState(_, name) return states[name] end
+function setState(_, name, value) states[name] = value end
 local lastPromptText = ''
 function axLLM(_, prompt)
   lastPromptText = prompt[2].content
@@ -66,6 +71,17 @@ local function loadGenerator()
 ${match[1]}
 end
 local gen = loadGenerator()
+states['lb-xnai-extra-registry-v1'] = {
+  { identity_key = 'extra-song-hee-jin-1', name = 'Song Hee-jin', appearance = 'stale conflicting appearance' },
+  { identity_key = 'extra-kang-hyejeong-1', name = '강혜정', appearance = 'stable extra appearance' }
+}
+local refreshedRegistry = gen.refreshExtraRegistry('test')
+assert(#refreshedRegistry == 1, 'canonical collision was not removed before planning')
+assert(refreshedRegistry[1].name == '강혜정', 'a real extra was removed with the canonical collision')
+assert(not chatVars['lb-xnai-extra-registry-prompt']:find('Song Hee%-jin'),
+  'canonical collision remained in the planner registry prompt')
+assert(chatVars['lb-xnai-extra-registry-prompt']:find('강혜정', 1, true),
+  'the surviving extra was not exposed to the planner')
 local malformed = { name = 'Broken', character_count = 2,
   identities = { identity_key = 'Broken', name = 'Broken', appearance = 'x' } }
 local response = {
@@ -159,6 +175,20 @@ local shortNameStory = table.concat({
 local shortNameScene = ${descriptor('Song Hee-jin', 'ivory jacket', 'private lounge', 'medium seated portrait', 5, 'lorebook')}
 assert(gen.descriptorGroundedAtSlot('test', shortNameScene, shortNameStory) == true,
   'a Korean full name introduced earlier did not ground its nearby given-name mention')
+local meetingScene = {
+  name = '강혜정', character_count = 2,
+  identities = {
+    { identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra', appearance = 'stable extra appearance' },
+    { identity_key = 'Song Hee-jin', name = '송희진', source = 'lorebook', appearance = 'canonical Song Hee-jin appearance' }
+  },
+  appearance = '강혜정 and 송희진 have distinct complete physical appearances',
+  outfit = '강혜정 wears a dark silk dress while 송희진 wears an ivory tailored jacket',
+  background = 'a quiet private gallery lounge with velvet partitions and a tea table',
+  composition = 'the two women sit opposite each other and exchange a tense direct gaze',
+  details = 'soft gallery lighting separates both faces and preserves realistic material detail', slot = 2
+}
+assert(gen.descriptorGroundedAtSlot('test', meetingScene, groundingStory) == true,
+  'a grounded extra and canonical character meeting scene was rejected')
 return true
 `;
 
@@ -170,17 +200,23 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.19.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.20.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));
     const onOutput = card.data.character_book.entries.find(
       (entry) => entry.name === 'lb-xnai.lb.onOutput'
     ).content;
+    const onInput = card.data.character_book.entries.find(
+      (entry) => entry.name === 'lb-xnai.lb.onInput'
+    ).content;
     lua.global.set('onOutputSource', onOutput);
+    lua.global.set('onInputSource', onInput);
     const syntaxResult = await lua.doString(`
       local compiled, syntaxError = load(onOutputSource)
       assert(compiled, syntaxError)
+      local inputCompiled, inputSyntaxError = load(onInputSource)
+      assert(inputCompiled, inputSyntaxError)
       return true
     `);
     if (syntaxResult !== true) throw new Error('onOutput syntax check failed');
