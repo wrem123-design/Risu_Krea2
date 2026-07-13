@@ -537,7 +537,7 @@ index 02bcd3d..c59578d 100644
          <!-- 프리셋매니징 탭 -->
          <div id="tab-preset-mgmt-content" class="tab-content">
              <div class="pm-container">
-@@ -15824,6 +16135,308 @@
+@@ -15824,6 +16135,309 @@
                  document.getElementById('tab-lora-content').classList.add('active');
                  const savedMode = sessionStorage.getItem('loraMode') || 'asset';
                  switchLoraMode(savedMode);
@@ -766,10 +766,11 @@ index 02bcd3d..c59578d 100644
 +                        <input class="krea-lora-input" type="text" value="${Number(entry.default_strength).toFixed(2)}" readonly aria-label="원본 강도">
 +                    </div>
 +                    <label class="krea-lora-field">
-+                        <span class="krea-lora-label">영문 캐릭터명</span>
-+                        <input class="krea-lora-input" data-field="character_name" type="text" maxlength="120"
-+                            value="${escAttr(entry.character_name || '')}" placeholder="Takahashi Kurumi"
++                        <span class="krea-lora-label">캐릭터명 / 별칭</span>
++                        <input class="krea-lora-input" data-field="character_name" type="text" maxlength="240"
++                            value="${escAttr(entry.character_name || '')}" placeholder="Stella, Song Hee-jin"
 +                            oninput="markKrea2LoraDirty()" autocomplete="off">
++                        <div class="krea-lora-source">쉼표로 구분한 이름 중 하나와 일치하면 이 LoRA를 적용합니다.</div>
 +                    </label>
 +                    <div class="krea-lora-field">
 +                        <span class="krea-lora-label">적용 강도</span>
@@ -851,7 +852,7 @@ new file mode 100644
 index 0000000..b69739b
 --- /dev/null
 +++ b/modes/krea2_character_lora.py
-@@ -0,0 +1,640 @@
+@@ -0,0 +1,654 @@
 +"""Krea2 character LoRA catalog, persistence, and per-request routing."""
 +
 +from __future__ import annotations
@@ -1044,6 +1045,12 @@ index 0000000..b69739b
 +    return " ".join(normalized.split()).casefold()
 +
 +
++def split_character_aliases(value: str) -> list[str]:
++    """Return trimmed comma-separated character aliases."""
++
++    return [" ".join(part.split()) for part in value.split(",") if part.strip()]
++
++
 +def normalize_preset_id(value: object) -> tuple[str, str]:
 +    """Return a display preset id and its case-insensitive comparison key."""
 +
@@ -1087,13 +1094,20 @@ index 0000000..b69739b
 +
 +        if not isinstance(raw_name, str):
 +            raise ValueError(f"Mapping {index} has an invalid character name")
-+        character_name = " ".join(raw_name.split())
-+        if len(character_name) > 120 or any(
-+            character in character_name for character in "[]\r\n"
-+        ):
++        if len(raw_name) > 240 or any(character in raw_name for character in "[]\r\n"):
 +            raise ValueError(f"Mapping {index} has an invalid character name")
-+        normalized_name = normalize_character_name(character_name)
-+        if normalized_name:
++        aliases = split_character_aliases(raw_name)
++        if raw_name.strip() and (
++            not aliases
++            or any(not part.strip() for part in raw_name.split(","))
++            or any(len(alias) > 120 for alias in aliases)
++        ):
++            raise ValueError(f"Mapping {index} has an invalid character alias list")
++        character_name = ", ".join(aliases)
++        normalized_aliases = [normalize_character_name(alias) for alias in aliases]
++        if len(normalized_aliases) != len(set(normalized_aliases)):
++            raise ValueError("A character alias can appear only once")
++        for normalized_name in normalized_aliases:
 +            if normalized_name in used_names:
 +                raise ValueError("Each character name can be assigned to only one LoRA")
 +            used_names.add(normalized_name)
@@ -1343,7 +1357,7 @@ index 0000000..b69739b
 +def find_character_mapping(
 +    character_name: str | None, mappings: list[MappingEntry]
 +) -> MappingEntry | None:
-+    """Find an exact normalized character mapping, or return no LoRA."""
++    """Find a mapping with any exact normalized alias, or return no LoRA."""
 +
 +    if not character_name:
 +        return None
@@ -1351,7 +1365,8 @@ index 0000000..b69739b
 +    if not expected:
 +        return None
 +    for mapping in mappings:
-+        if normalize_character_name(mapping["character_name"]) == expected:
++        aliases = split_character_aliases(mapping["character_name"])
++        if any(normalize_character_name(alias) == expected for alias in aliases):
 +            return mapping
 +    return None
 +
@@ -1779,7 +1794,7 @@ new file mode 100644
 index 0000000..ffe6a9d
 --- /dev/null
 +++ b/tests/test_krea2_character_lora.py
-@@ -0,0 +1,514 @@
+@@ -0,0 +1,573 @@
 +"""Tests for Krea2 character-specific LoRA routing."""
 +
 +from __future__ import annotations
@@ -2017,6 +2032,49 @@ index 0000000..ffe6a9d
 +                ],
 +            )
 +
++    def test_validates_alias_lists_and_rejects_cross_lora_alias_collisions(self) -> None:
++        module = load_module()
++        catalog = [
++            {
++                "filename": r"krea2\H2H_Stella_v1.safetensors",
++                "default_strength": 0.8,
++                "source_enabled": True,
++            },
++            {
++                "filename": r"krea2\Other_v1.safetensors",
++                "default_strength": 0.7,
++                "source_enabled": True,
++            },
++        ]
++        validated = module.validate_mapping_entries(
++            catalog,
++            [
++                {
++                    "filename": r"krea2\H2H_Stella_v1.safetensors",
++                    "character_name": " Stella ,  Song   Hee-jin ",
++                    "strength": 0.8,
++                }
++            ],
++        )
++        self.assertEqual(validated[0]["character_name"], "Stella, Song Hee-jin")
++
++        with self.assertRaises(ValueError):
++            module.validate_mapping_entries(
++                catalog,
++                [
++                    {
++                        "filename": r"krea2\H2H_Stella_v1.safetensors",
++                        "character_name": "Stella, Song Hee-jin",
++                        "strength": 0.8,
++                    },
++                    {
++                        "filename": r"krea2\Other_v1.safetensors",
++                        "character_name": "song hee-JIN",
++                        "strength": 0.7,
++                    },
++                ],
++            )
++
 +    def test_validates_persists_and_loads_preset_routes(self) -> None:
 +        module = load_module()
 +        catalog = [
@@ -2183,6 +2241,22 @@ index 0000000..ffe6a9d
 +        self.assertIsNone(module.find_character_mapping("타카하시 쿠루미", mappings))
 +        self.assertIsNone(module.find_character_mapping("", mappings))
 +        self.assertIsNone(module.find_character_mapping("Roh Hae-il", mappings))
++
++    def test_comma_separated_aliases_route_to_the_same_lora(self) -> None:
++        module = load_module()
++        mappings = [
++            {
++                "filename": r"krea2\H2H_Stella_v1.safetensors",
++                "character_name": "Stella, Song Hee-jin",
++                "strength": 0.72,
++            }
++        ]
++
++        self.assertEqual(module.find_character_mapping("stella", mappings), mappings[0])
++        self.assertEqual(
++            module.find_character_mapping(" song   hee-JIN ", mappings), mappings[0]
++        )
++        self.assertIsNone(module.find_character_mapping("Minji", mappings))
 +
 +    def test_selected_mapping_keeps_one_loader_and_sets_file_and_strength(self) -> None:
 +        module = load_module()
