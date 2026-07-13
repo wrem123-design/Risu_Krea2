@@ -209,6 +209,69 @@ assert(lastPromptText:find('Previous candidate rejection:', 1, true),
   'the second focused retry did not receive the exact first rejection reason')
 assert(lastPromptText:find('outfit', 1, true),
   'the focused retry prompt did not identify the missing outfit field')
+
+local oneOfTwoIdentities = {
+  scenes = {{
+    name = '강혜정', character_count = 2,
+    identities = {{
+      identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
+      appearance = '강혜정 stable physical appearance'
+    }},
+    appearance = '강혜정 and 송희진 have clearly distinct complete physical appearances',
+    outfit = '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
+    background = 'a quiet hotel lobby with warm lamps and polished stone walls',
+    composition = '강혜정 and 송희진 stand face to face during a tense private conversation',
+    details = 'realistic skin texture and soft practical lighting preserve both faces', slot = 0
+  }}
+}
+local repairedTwoIdentities = {
+  scenes = {{
+    name = '강혜정', character_count = 2,
+    identities = {
+      {
+        identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
+        appearance = '강혜정 stable physical appearance'
+      },
+      {
+        identity_key = 'extra-song-heejin-1', name = '송희진', source = 'extra',
+        appearance = '송희진 stable physical appearance'
+      }
+    },
+    appearance = '강혜정 and 송희진 have clearly distinct complete physical appearances',
+    outfit = '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
+    background = 'a quiet hotel lobby with warm lamps and polished stone walls',
+    composition = '강혜정 and 송희진 stand face to face during a tense private conversation',
+    details = 'realistic skin texture and soft practical lighting preserve both faces', slot = 0
+  }}
+}
+local changedOneOfTwoIdentities = {
+  scenes = {{
+    name = '강혜정', character_count = 2,
+    identities = {{
+      identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra',
+      appearance = '강혜정 stable physical appearance'
+    }},
+    appearance = 'an unwanted rewritten appearance paragraph',
+    outfit = 'an unwanted rewritten outfit paragraph',
+    background = 'an unwanted rewritten background paragraph',
+    composition = 'an unwanted rewritten composition paragraph',
+    details = 'an unwanted rewritten details paragraph', slot = 0
+  }}
+}
+queue = { oneOfTwoIdentities, changedOneOfTwoIdentities, repairedTwoIdentities }
+local cardinalityCandidate, cardinalityFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} }, '강혜정과 송희진은 호텔 로비에서 마주 보고 대화했다.', false)
+assert(cardinalityCandidate and #cardinalityCandidate.identities == 2,
+  'an identity-count-only third repair did not recover the two-person scene')
+assert(cardinalityCandidate.outfit ==
+  '강혜정 wears a cream jacket while 송희진 wears a tailored black coat',
+  "the identity-only repair did not preserve the first candidate's valid prose")
+assert(cardinalityFailure == '',
+  'a successful identity-count-only repair retained a failure state')
+assert(lastPromptText:find('Identity cardinality repair:', 1, true),
+  'the third repair did not receive the identity-cardinality-specific instruction')
+assert(lastPromptText:find('exactly 2 identity records', 1, true),
+  'the identity-cardinality retry did not state the required record count')
 return true
 `;
 
@@ -220,7 +283,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.21.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.22.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));

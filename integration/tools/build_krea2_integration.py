@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.21"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4421"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.22"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4422"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -572,6 +572,50 @@ local function descriptorReady(desc)
   return descriptorReadinessReason(desc) == ''
 end
 
+local function identityCardinalityMismatch(desc)
+  desc = normalizeDescriptorShape(desc)
+  if type(desc) ~= 'table' then return nil, nil end
+  local expected = tonumber(desc.character_count)
+  if not expected or expected % 1 ~= 0 or expected < 1 or expected > 3 then
+    return nil, nil
+  end
+  local actual = type(desc.identities) == 'table' and #desc.identities or 0
+  if actual == expected then return nil, nil end
+  return expected, actual
+end
+
+local function identityCardinalityRepairNote(desc)
+  local expected, actual = identityCardinalityMismatch(desc)
+  if not expected then return '' end
+  local identityRows = {}
+  for index = 1, expected do
+    table.insert(identityRows, '  ' .. tostring(index) ..
+      '. identity_key: ... | name: ... | source: lorebook or extra | appearance: ...')
+  end
+  return table.concat({
+    'Identity cardinality repair:',
+    'The previous candidate declared character_count ' .. tostring(expected) ..
+      ' but supplied ' .. tostring(actual) .. ' identity records.',
+    'Keep character_count at ' .. tostring(expected) .. ' and return exactly ' ..
+      tostring(expected) .. ' identity records, one for every visible named person in the selected story moment.',
+    'Use the canonical lorebook appearance when available; otherwise use the exact story name and source extra.',
+    'Return the complete descriptor, but copy name, appearance, outfit, background, composition, details, and slot without changing them.',
+    'Required identity records:',
+    table.concat(identityRows, '\n'),
+  }, '\n')
+end
+
+local function mergeIdentityCardinalityRepair(original, repaired)
+  local expected = identityCardinalityMismatch(original)
+  if not expected or type(repaired) ~= 'table' then return repaired end
+  repaired = normalizeDescriptorShape(repaired)
+  if type(repaired) ~= 'table' or #repaired.identities ~= expected then
+    return repaired
+  end
+  original.identities = repaired.identities
+  return normalizeDescriptorShape(original)
+end
+
 local function sanitizeResponseDescriptors(response)
   response = type(response) == 'table' and response or {}
   local cleanScenes = {}
@@ -907,11 +951,18 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     'Story:', story,
   }, '\n\n')
   local lastFailure = '보조 모델이 유효한 이미지 설명을 반환하지 않았습니다.'
-  for attempt = 1, 2 do
+  local lastCandidate = nil
+  local identityRepairBase = nil
+  for attempt = 1, 3 do
     local retryNote = ''
     if attempt == 2 then
       retryNote = '\n\nPrevious candidate rejection: ' .. lastFailure ..
         '\nCorrect exactly that rejection while preserving every already valid image descriptor. Return one complete replacement descriptor only.'
+    elseif attempt == 3 then
+      local cardinalityNote = identityCardinalityRepairNote(identityRepairBase)
+      if cardinalityNote == '' then break end
+      retryNote = '\n\nPrevious candidate rejection: ' .. lastFailure ..
+        '\n\n' .. cardinalityNote
     end
     local prompt = {
       { role = 'system', content = 'You create one missing structured image descriptor at a time. Output only the requested data.' },
@@ -923,6 +974,13 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
       if not candidate then
         lastFailure = '응답에서 해석 가능한 단일 이미지 설명 구조를 찾지 못했습니다.'
       else
+        if attempt == 3 then
+          candidate = mergeIdentityCardinalityRepair(identityRepairBase, candidate)
+        end
+        if not identityRepairBase and identityCardinalityMismatch(candidate) then
+          identityRepairBase = candidate
+        end
+        lastCandidate = candidate
         lastFailure = descriptorCandidateFailure(
           triggerId, candidate, response, fullChatContent, wantKeyVisual)
         if lastFailure == '' then return candidate, '' end
@@ -969,7 +1027,7 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
     if not descriptorReady(seedScene) then
       return response, {{
         kind = 'scene', ordinal = 1,
-        reason = '정상 이미지 설명이 하나도 없어 첫 씬을 두 번 새로 요청했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(seedFailure),
+        reason = '정상 이미지 설명이 하나도 없어 첫 씬을 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(seedFailure),
       }}
     end
     table.insert(response.scenes, seedScene)
@@ -981,7 +1039,7 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
       assignSceneSlots(response, fullChatContent)
       return response, {{
         kind = 'keyvis', ordinal = 1,
-        reason = '누락된 키비주얼 설명을 두 번 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(keyVisualFailure),
+        reason = '누락된 키비주얼 설명을 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(keyVisualFailure),
       }}
     end
     keyVisual.slot = nil
@@ -997,7 +1055,7 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
       assignSceneSlots(response, fullChatContent)
       return response, {{
         kind = 'scene', ordinal = ordinal,
-        reason = '누락된 이미지 설명 ' .. tostring(ordinal) .. '을 두 번 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(candidateFailure),
+        reason = '누락된 이미지 설명 ' .. tostring(ordinal) .. '을 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(candidateFailure),
       }}
     end
     table.insert(response.scenes, candidate)
@@ -1606,7 +1664,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.21-krea2"
+        data["character_version"] = "4.4.22-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

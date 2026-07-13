@@ -23,7 +23,7 @@ control to `2` to retain focused repair for genuinely missing fields.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.21.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.22.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -43,7 +43,7 @@ background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words. Missing paragraphs are repaired,
 while shorter non-empty prose is retained so a weak auxiliary model does not
 replace a usable response with a worse full rewrite.
-Version 4.4.21 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.22 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's story-matching lorebook alias as an internal routing marker, and Hooking
@@ -73,14 +73,18 @@ zero-based indices. Disabled keyvis is enforced both during validation and immed
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
-The 4.4.21 output hook removes malformed descriptors before any ComfyUI request,
+The 4.4.22 output hook removes malformed descriptors before any ComfyUI request,
 converts a valid disabled key visual into an ordinary scene, and asks the auxiliary
-model twice for every missing descriptor. It no longer fills the image count by
-cloning one scene. A rejected focused retry now feeds its exact structural, duplicate,
-slot, or character-grounding reason into the second request. If the final retry still
-fails, already valid scenes continue to ComfyUI and a detailed failure notice is
-appended for the missing image. A later per-image ComfyUI failure is rendered at that
-scene's story slot while every successful inlay remains unchanged. The output boundary
+model twice for every missing descriptor. Only when both candidates declare two or
+three visible characters but provide fewer identity records, it makes one additional
+identity-cardinality repair request. The repair contributes only the corrected
+`identities` list; the already valid appearance, outfit, background, composition,
+details, name, and slot remain unchanged. It no longer fills the image count by cloning
+one scene. A rejected focused retry feeds its exact structural, duplicate, slot, or
+character-grounding reason into the second request. If the final applicable retry still
+fails, already valid scenes continue to ComfyUI and a detailed failure notice is appended
+for the missing image. A later per-image ComfyUI failure is rendered at that scene's
+story slot while every successful inlay remains unchanged. The output boundary
 imports a versioned generator entry and records planned, successful, and failed
 generation counts plus all failure reasons in `lb-xnai-last-generation-debug`.
 If every initial descriptor is malformed, it requests a new complete seed scene
