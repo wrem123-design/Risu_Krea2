@@ -49,7 +49,16 @@ end
 prelude = {
   trim = function(value) return tostring(value or ''):match('^%s*(.-)%s*$') end,
   removeAllNodes = function(value) return value end,
-  getPriorityLoreBook = function() return nil end,
+  getPriorityLoreBook = function(_, name)
+    if name == 'lb-xnai.lb.extra' then
+      return { content = [[## Oh Deok-gu / 오덕규
+Canonical appearance
+
+### Stella, Song Hee-jin / 스텔라, 송희진
+Shared aliases]] }
+    end
+    return nil
+  end,
   queryNodes = function() return {{ content = 'candidate' }} end,
   toon = { decode = function() return table.remove(queue, 1) end }
 }
@@ -66,7 +75,7 @@ local response = {
     ${descriptor('Scene A', 'white shirt', 'messy dressing room', 'medium reaction shot', 0)}
   }
 }
-local completed = gen.completeResponseImageCount('test', response, 'one\\n\\ntwo\\n\\nthree\\n\\nfour\\n\\nfive')
+local completed = gen.completeResponseImageCount('test', response, 'Scene A waits.\\n\\nScene B leaves.\\n\\nScene C argues.\\n\\nScene D arrives.\\n\\nThe story ends.')
 assert(completed.keyvis == nil, 'disabled key visual was not converted')
 assert(#completed.scenes == 4, 'expected four valid scenes')
 for _, scene in ipairs(completed.scenes) do
@@ -87,7 +96,7 @@ queue = {
 }
 local recovered = gen.completeResponseImageCount('test', {
   scenes = { malformed }
-}, 'one\\n\\ntwo\\n\\nthree\\n\\nfour\\n\\nfive')
+}, 'Fresh A waits.\\n\\nFresh B speaks.\\n\\nFresh C reacts.\\n\\nFresh D arrives.\\n\\nThe story ends.')
 assert(#recovered.scenes == 4, 'an all-malformed response was not rebuilt')
 assert(recovered.scenes[1].name == 'Fresh A', 'fresh seed scene was not requested')
 assert(lastPromptText:find('strongest visually consequential', 1, true), 'scene selection policy missing from repair prompt')
@@ -107,11 +116,30 @@ local clustered = { scenes = {
   ${descriptor('Ordinal D', 'd coat', 'room d', 'shot d', 3)}
 } }
 local longStory = table.concat({
-  'p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13'
+  'p1','Spread A appears','p3','p4','p5','Spread B appears','p7','p8',
+  'Spread C appears','p10','Spread D appears','p12','p13'
 }, '\\n\\n')
 local spread = gen.completeResponseImageCount('test', clustered, longStory)
 assert(spread.scenes[1].name == 'Spread A', 'ordinal top cluster was not rebuilt')
 assert(spread.scenes[2].slot == 5 and spread.scenes[3].slot == 8 and spread.scenes[4].slot == 10)
+
+local wrongKnownCharacter = ${descriptor('Oh Deok-gu', 'gray suit', 'hotel lounge', 'medium portrait', 0)}
+local realExtra = {
+  name = '강혜정', character_count = 1,
+  identities = {{ identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra', appearance = '강혜정 fixed physical appearance' }},
+  appearance = '강혜정 detailed appearance', outfit = 'cream jacket and dark trousers',
+  background = 'quiet hotel lounge', composition = 'seated conversation portrait',
+  details = 'soft practical lighting and realistic material detail', slot = 0
+}
+local groundingStory = '강혜정은 창가에 앉아 송희진을 기다렸다.\\n\\n송희진이 라운지로 들어왔다.\\n\\n두 사람은 서로를 바라봤다.'
+assert(gen.descriptorGroundedAtSlot('test', wrongKnownCharacter, groundingStory) == false,
+  'a canonical character absent from the selected scene was accepted')
+assert(gen.descriptorGroundedAtSlot('test', realExtra, groundingStory) == true,
+  'an unlisted named extra copied from the story was rejected')
+assert(gen.isCanonicalLorebookName('test', 'Song Hee-jin') == true,
+  'comma-separated English lorebook aliases were not recognized')
+assert(gen.isCanonicalLorebookName('test', '송희진') == true,
+  'comma-separated Korean lorebook aliases were not recognized')
 return true
 `;
 
@@ -123,7 +151,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.16.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.17.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));

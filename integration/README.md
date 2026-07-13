@@ -23,7 +23,7 @@ control to `2` to retain focused repair for genuinely missing fields.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.16.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.17.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -43,10 +43,10 @@ background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words. Missing paragraphs are repaired,
 while shorter non-empty prose is retained so a weak auxiliary model does not
 replace a usable response with a worse full rewrite.
-Version 4.4.16 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.17 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
-character's canonical English name as an internal routing marker, and Hooking
+character's story-matching lorebook alias as an internal routing marker, and Hooking
 Manager applies at most one exactly matched character LoRA. A two- or
 three-person descriptor sends a multi-character marker that always bypasses the
 dynamic LoRA node, preventing one identity LoRA from affecting every face.
@@ -73,7 +73,7 @@ zero-based indices. Disabled keyvis is enforced both during validation and immed
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
-The 4.4.16 output hook removes malformed descriptors before any ComfyUI request,
+The 4.4.17 output hook removes malformed descriptors before any ComfyUI request,
 converts a valid disabled key visual into an ordinary scene, and asks the auxiliary
 model twice for every missing descriptor. It no longer fills the image count by
 cloning one scene, so malformed or duplicate retries stop with a clear error instead
@@ -104,7 +104,12 @@ Temporary extras use per-descriptor identity records and a chat-scoped
 up to the configured 1–50 limit, and the immutable appearance is injected into the
 next auxiliary-model request through a separate chat variable. The canonical
 `lb-xnai.lb.extra` lorebook is read-only and takes precedence on normalized English
-or Korean name collisions. Temporary extras never receive character LoRA routing.
+or Korean name collisions. Comma-separated names on either side of a lorebook heading
+are treated as aliases. Every planned scene is grounded against the paragraphs near its
+selected slot: a canonical identity needs one nearby lorebook alias, while an extra needs
+its exact story spelling. Ungrounded substitutions are discarded and rewritten.
+Single-person extras still emit a routing name, but Hooking Manager applies a LoRA only
+when that exact alias was explicitly configured; ordinary unmapped extras therefore bypass it.
 
 ## Workflow contract
 

@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.16"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4416"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.17"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4417"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -55,7 +55,9 @@ Across the complete image set, keep story relevance as the primary criterion and
 
 Each image may contain one to three identifiable characters. Use one character for genuinely solitary moments. When the selected narrative moment depends on dialogue, eye contact, touch, confrontation, assistance, or another visible relationship, include the required supporting characters with their faces and bodies visible instead of converting them into off-screen presences or anonymous cropped limbs. Never add unrelated crowd members merely to fill the frame.
 
-The `lb-xnai.lb.extra` lorebook is the authoritative source for every identifiable character's fixed physical identity. Copy the supplied identity traits for all visible participants into `appearance`, describing the primary character first and keeping each person's traits clearly separated. Never merge traits between characters. Do not put clothing, pose, expression, camera, lighting, or background in `appearance`.
+The `lb-xnai.lb.extra` lorebook is the authoritative source for every identifiable character's fixed physical identity. Copy the supplied identity traits for all visible participants into `appearance`, describing the primary character first and keeping each person's traits clearly separated. Never merge traits between characters. Do not put clothing, pose, expression, camera, lighting, or background in `appearance`. Comma-separated names on either side of a lorebook heading are aliases for the same identity; choose the single alias that matches the current story text instead of outputting the whole alias list.
+
+Never substitute a listed canonical character for an unlisted named person who is actually present in the selected story moment. When an unlisted named person speaks, acts, is seen, or visibly interacts in that moment, create an `extra` identity and copy the exact spelling used in the story into both its display `name` and the scene's focal `name`; do not romanize, translate, or replace it with a familiar character. A canonical character may be selected only when one of that character's lorebook aliases occurs near the chosen `[Slot N]`. A person mentioned only as an absent creator, owner, memory, message author, or choice-text reference is not visually present unless the prose says so.
 
 `lb-xnai.lb.extra` is read-only canonical lore and always has priority. The temporary extra-character registry below is separate chat-scoped memory. Reuse an existing extra's exact `identity_key`, `name`, and immutable physical `appearance` whenever the same story person returns. Never use a registry entry for a canonical lorebook character, never overwrite canonical traits, and never copy clothing, pose, expression, lighting, or location into identity appearance.
 
@@ -63,7 +65,7 @@ The `lb-xnai.lb.extra` lorebook is the authoritative source for every identifiab
 {{getvar::lb-xnai-extra-registry-prompt}}
 </temporary-extra-registry>
 
-For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and equal both the visible identifiable character count and the number of identity records. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the English name before the first slash in their lorebook heading and source `lorebook`. Unlisted people use source `extra` and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. Only a one-character canonical lorebook descriptor may route a LoRA. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
+For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and equal both the visible identifiable character count and the number of identity records. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the single lorebook alias matching the story and source `lorebook`. Unlisted people use source `extra`, the exact story spelling as their display name, and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. A one-character descriptor emits its focal name to the Hooking Manager; only an exact configured alias activates a LoRA, while unmapped extras safely bypass it. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
 
 1. `appearance` (at least 30 words): name and describe every identifiable participant using fixed age category, skin, build, face shape, eyes, brows, nose, lips, hair, and permanent marks actually supplied by the profiles or story. Keep descriptions person-specific and do not invent conflicting identity traits merely to increase length.
 2. `outfit` (at least 35 words): describe the exact current clothing and accessories of every visible participant, including color, cut, fit, layers, fabric, fasteners, footwear, and continuity. A completed outfit change fully replaces the prior outfit.
@@ -354,18 +356,42 @@ local function normalizeIdentity(value)
   return trimText(value):lower():gsub('[%p%s]+', '')
 end
 
-local function canonicalLorebookNames(triggerId)
-  local names = {}
+local function splitLorebookAliases(value)
+  local aliases = {}
+  for alias in trimText(value):gmatch('[^,]+') do
+    alias = trimText(alias)
+    if alias ~= '' then table.insert(aliases, alias) end
+  end
+  return aliases
+end
+
+local function canonicalLorebookAliasMap(triggerId)
+  local aliasMap = {}
   local book = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
   local content = book and book.content or ''
   for line in content:gmatch('[^\r\n]+') do
-    local heading = line:match('^###%s+(.+)$')
+    local heading = line:match('^###+%s+(.+)$')
     if heading then
-      local english, alias = heading:match('^%s*(.-)%s*/%s*(.-)%s*$')
-      if english then names[normalizeIdentity(english)] = true end
-      if alias then names[normalizeIdentity(alias)] = true end
+      local english, translated = heading:match('^%s*(.-)%s*/%s*(.-)%s*$')
+      local group = {}
+      for _, alias in ipairs(splitLorebookAliases(english or heading)) do
+        table.insert(group, alias)
+      end
+      for _, alias in ipairs(splitLorebookAliases(translated or '')) do
+        table.insert(group, alias)
+      end
+      for _, alias in ipairs(group) do
+        local key = normalizeIdentity(alias)
+        if key ~= '' then aliasMap[key] = group end
+      end
     end
   end
+  return aliasMap
+end
+
+local function canonicalLorebookNames(triggerId)
+  local names = {}
+  for key in pairs(canonicalLorebookAliasMap(triggerId)) do names[key] = true end
   return names
 end
 
@@ -600,6 +626,62 @@ local function descriptorSlotIsAvailable(candidate, response, fullChatContent)
   return true
 end
 
+local function storyWindowForSlot(fullChatContent, slot)
+  local cleaned = trimText(prelude.removeAllNodes(fullChatContent or ''))
+  local paragraphs = {}
+  for paragraph in (cleaned .. '\n\n'):gmatch('(.-)\n\n+') do
+    paragraph = trimText(paragraph)
+    if paragraph ~= '' then table.insert(paragraphs, paragraph) end
+  end
+  local boundary = math.floor(tonumber(slot) or -1) + 1
+  if boundary < 1 then return '' end
+  local first = math.max(1, boundary - 2)
+  local last = math.min(#paragraphs, boundary + 3)
+  local window = {}
+  for index = first, last do table.insert(window, paragraphs[index]) end
+  return table.concat(window, '\n')
+end
+
+local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
+  if not descriptorReady(descriptor) then return false end
+  local slot = tonumber(descriptor.slot)
+  if not slot then return false end
+  local normalizedWindow = normalizeIdentity(storyWindowForSlot(fullChatContent, slot))
+  if normalizedWindow == '' then return false end
+  local canonicalAliases = canonicalLorebookAliasMap(triggerId)
+  for _, identity in ipairs(descriptor.identities or {}) do
+    local name = trimText(identity.name)
+    local key = normalizeIdentity(name)
+    local aliasGroup = canonicalAliases[key]
+      or canonicalAliases[normalizeIdentity(identity.identity_key)]
+    local found = false
+    if aliasGroup then
+      for _, alias in ipairs(aliasGroup) do
+        local normalizedAlias = normalizeIdentity(alias)
+        if normalizedAlias ~= '' and normalizedWindow:find(normalizedAlias, 1, true) then
+          found = true
+          break
+        end
+      end
+    elseif key ~= '' and normalizedWindow:find(key, 1, true) then
+      found = true
+    end
+    if not found then return false end
+  end
+  return true
+end
+
+local function sanitizeGroundedScenes(triggerId, response, fullChatContent)
+  local grounded = {}
+  for _, scene in ipairs(response.scenes or {}) do
+    if descriptorGroundedAtSlot(triggerId, scene, fullChatContent) then
+      table.insert(grounded, scene)
+    end
+  end
+  response.scenes = grounded
+  return response
+end
+
 local function sanitizeSceneSlots(response, fullChatContent)
   local cleanScenes = {}
   local used = {}
@@ -709,6 +791,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     'For a scene slot, copy the exact numeric N from [Slot N] nearest the described event. The slot is a source-story position, not the ordinal number of the generated image. Use an unused marker and never default to slot 0.',
     'Scene-selection policy:', resolveSceneSelectionGuidance(triggerId),
     'Story relevance remains primary. Use cast coverage only as a soft tie-breaker: when the story supports an equally meaningful moment, prefer an underrepresented named character or a visible interaction over another repetitive protagonist-only shot. Never invent or promote a passive bystander merely for diversity.',
+    'Never substitute a canonical lorebook character for an unlisted named person present in the selected moment. For an unlisted person, use source extra and copy the exact story spelling into identity.name and the focal name. Every declared identity must be named near the copied [Slot N]; an absent creator, owner, memory, message author, or choice-only reference is not visually present.',
     'Return one <lb-xnai> block only, using exactly this TOON shape:',
     '<lb-xnai>', outputShape, '</lb-xnai>',
     'Every descriptor must include one to three identities and five non-empty detailed English prose fields.',
@@ -731,7 +814,8 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     if ok and type(llmResponse) == 'table' and llmResponse.success then
       local candidate = decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
       local slotReady = wantKeyVisual or descriptorSlotIsAvailable(candidate, response, fullChatContent)
-      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) and slotReady then
+      local grounded = wantKeyVisual or descriptorGroundedAtSlot(triggerId, candidate, fullChatContent)
+      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) and slotReady and grounded then
         return candidate
       end
     end
@@ -755,6 +839,7 @@ end
 local function completeResponseImageCount(triggerId, response, fullChatContent)
   response = sanitizeResponseDescriptors(response)
   response = sanitizeSceneSlots(response, fullChatContent)
+  response = sanitizeGroundedScenes(triggerId, response, fullChatContent)
   local keyVisualPolicy = trimText(getGlobalVar(triggerId, 'toggle_lb-xnai.keyVisual'))
   if keyVisualPolicy == '2' or keyVisualPolicy == '사용 안 함' then
     response.keyvis = nil
@@ -866,7 +951,7 @@ local function buildPresetPrompt(triggerId, desc)
   positive = safeReplace(positive, '{prompt}', prompt)
   positive = positive:gsub('\n\n\n+', '\n\n')
 
-  if characterCount == 1 and isCanonicalLorebookName(triggerId, name) then
+  if characterCount == 1 and name ~= '' then
     local routingName = name:gsub('[%[%]\r\n]', ' '):gsub('%s+', ' ')
     positive = '[[KREA2_CHARACTER:' .. routingName .. ']]\n' .. positive
   else
@@ -955,6 +1040,9 @@ return {
   normalizeDescriptorShape = normalizeDescriptorShape,
   sanitizeResponseDescriptors = sanitizeResponseDescriptors,
   sanitizeSceneSlots = sanitizeSceneSlots,
+  sanitizeGroundedScenes = sanitizeGroundedScenes,
+  descriptorGroundedAtSlot = descriptorGroundedAtSlot,
+  isCanonicalLorebookName = isCanonicalLorebookName,
 }
 """
 
@@ -1312,7 +1400,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.16-krea2"
+        data["character_version"] = "4.4.17-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

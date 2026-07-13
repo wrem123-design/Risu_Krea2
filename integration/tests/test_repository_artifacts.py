@@ -36,15 +36,15 @@ HOOK_CORS_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.16 module artifact."""
+    """Return the single published Krea2 4.4.17 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.16" in path.name
+        if "Krea2 4.4.17" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.16 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.17 module, found {matches}")
     return matches[0]
 
 
@@ -167,13 +167,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("return fullChatContent, '<lb-lazy", on_output)
         self.assertNotIn("return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수", on_output)
 
-        self.assertIn("lb-xnai.gen.v4416", entries)
-        self.assertEqual(entries["lb-xnai.gen.v4416"], entries["lb-xnai.gen"])
-        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4416')", on_output)
+        self.assertIn("lb-xnai.gen.v4417", entries)
+        self.assertEqual(entries["lb-xnai.gen.v4417"], entries["lb-xnai.gen"])
+        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4417')", on_output)
         self.assertIn("gen.sanitizeResponseDescriptors", on_output)
         self.assertIn("if failedCount > 0 then", on_output)
         self.assertIn(
-            "prelude.import(tid, 'lb-xnai.gen.v4416')",
+            "prelude.import(tid, 'lb-xnai.gen.v4417')",
             entries["lb-xnai.lb.onInput"],
         )
 
@@ -244,13 +244,18 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("lb-xnai-extra-registry-v1", builder.GENERATOR_LUA)
         self.assertIn("lb-xnai-extra-registry-prompt", builder.GENERATOR_LUA)
         self.assertIn("isCanonicalLorebookName", builder.GENERATOR_LUA)
+        self.assertIn("splitLorebookAliases", builder.GENERATOR_LUA)
+        self.assertIn("descriptorGroundedAtSlot", builder.GENERATOR_LUA)
+        self.assertIn("sanitizeGroundedScenes", builder.GENERATOR_LUA)
+        self.assertIn("Never substitute a listed canonical character", builder.MAIN_INSTRUCTIONS)
+        self.assertIn("copy the exact spelling used in the story", builder.MAIN_INSTRUCTIONS)
         self.assertIn("identity.source == 'extra'", builder.GENERATOR_LUA)
         self.assertIn("toggle_lb-xnai.extraMemory", builder.GENERATOR_LUA)
         self.assertIn("toggle_lb-xnai.extraMemoryLimit", builder.GENERATOR_LUA)
         self.assertNotIn("setPriorityLoreBook", builder.GENERATOR_LUA)
         self.assertNotIn("setLoreBook", builder.GENERATOR_LUA)
         self.assertIn(
-            "characterCount == 1 and isCanonicalLorebookName(triggerId, name)",
+            "characterCount == 1 and name ~= ''",
             builder.GENERATOR_LUA,
         )
         self.assertIn("lb-xnai.extraMemory=엑스트라 기억=select=사용,사용 안 함", builder.MODULE_TOGGLES)
@@ -264,13 +269,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_4416_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_4417_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.16")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.17")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
