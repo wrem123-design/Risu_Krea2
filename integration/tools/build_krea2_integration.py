@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.20"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4420"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.21"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4421"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -526,25 +526,50 @@ local function normalizeDescriptorShape(desc)
   return desc
 end
 
-local function descriptorReady(desc)
+local function descriptorReadinessReason(desc)
   desc = normalizeDescriptorShape(desc)
-  if type(desc) ~= 'table' or trimText(desc.name) == '' then return false end
+  if type(desc) ~= 'table' then
+    return '응답에서 이미지 설명 구조를 찾지 못했습니다.'
+  end
+  if trimText(desc.name) == '' then
+    return '대표 캐릭터 name이 비어 있습니다.'
+  end
   local characterCount = tonumber(desc.character_count)
-  if not characterCount or characterCount < 1 or characterCount > 3 then return false end
-  if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then return false end
-  for _, identity in ipairs(desc.identities) do
-    if type(identity) ~= 'table'
-        or trimText(identity.identity_key) == ''
-        or trimText(identity.name) == ''
-        or trimText(identity.appearance) == ''
-        or (identity.source ~= 'lorebook' and identity.source ~= 'extra') then
-      return false
+  if not characterCount or characterCount % 1 ~= 0
+      or characterCount < 1 or characterCount > 3 then
+    return 'character_count가 1~3 범위의 정수가 아닙니다.'
+  end
+  if type(desc.identities) ~= 'table' or #desc.identities ~= characterCount then
+    return 'identities 개수(' .. tostring(type(desc.identities) == 'table' and #desc.identities or 0) ..
+      ')가 character_count(' .. tostring(characterCount) .. ')와 일치하지 않습니다.'
+  end
+  for index, identity in ipairs(desc.identities) do
+    if type(identity) ~= 'table' then
+      return 'identities ' .. tostring(index) .. '번 항목이 올바른 구조가 아닙니다.'
+    end
+    if trimText(identity.identity_key) == '' then
+      return 'identities ' .. tostring(index) .. '번의 identity_key가 비어 있습니다.'
+    end
+    if trimText(identity.name) == '' then
+      return 'identities ' .. tostring(index) .. '번의 name이 비어 있습니다.'
+    end
+    if trimText(identity.appearance) == '' then
+      return 'identities ' .. tostring(index) .. '번의 appearance가 비어 있습니다.'
+    end
+    if identity.source ~= 'lorebook' and identity.source ~= 'extra' then
+      return 'identities ' .. tostring(index) .. '번의 source가 lorebook 또는 extra가 아닙니다.'
     end
   end
   for _, field in ipairs(requiredDescriptorFields) do
-    if trimText(desc[field]) == '' then return false end
+    if trimText(desc[field]) == '' then
+      return '필수 필드 ' .. field .. '이(가) 비어 있습니다.'
+    end
   end
-  return true
+  return ''
+end
+
+local function descriptorReady(desc)
+  return descriptorReadinessReason(desc) == ''
 end
 
 local function sanitizeResponseDescriptors(response)
@@ -641,16 +666,27 @@ local function storySlotLimit(fullChatContent)
   return math.max(1, maximum + 1)
 end
 
-local function descriptorSlotIsAvailable(candidate, response, fullChatContent)
-  if type(candidate) ~= 'table' then return false end
+local function descriptorSlotAvailabilityReason(candidate, response, fullChatContent)
+  if type(candidate) ~= 'table' then return '장면 설명 구조가 없습니다.' end
   local slot = tonumber(candidate.slot)
   local limit = storySlotLimit(fullChatContent)
-  if not slot or slot % 1 ~= 0 or slot < 0 or slot >= limit then return false end
+  if not slot or slot % 1 ~= 0 then
+    return 'slot이 본문의 [Slot N]과 대응하는 정수가 아닙니다.'
+  end
+  if slot < 0 or slot >= limit then
+    return 'slot ' .. tostring(slot) .. '이(가) 본문 범위 0~' .. tostring(limit - 1) .. ' 밖입니다.'
+  end
   for _, scene in ipairs(response.scenes or {}) do
-    if tonumber(scene.slot) == slot then return false end
+    if tonumber(scene.slot) == slot then
+      return 'slot ' .. tostring(slot) .. '은(는) 이미 다른 이미지 설명이 사용 중입니다.'
+    end
   end
   candidate.slot = slot
-  return true
+  return ''
+end
+
+local function descriptorSlotIsAvailable(candidate, response, fullChatContent)
+  return descriptorSlotAvailabilityReason(candidate, response, fullChatContent) == ''
 end
 
 local function storyWindowForSlot(fullChatContent, slot)
@@ -680,12 +716,14 @@ local function koreanGivenName(value)
   return offset and text:sub(offset) or ''
 end
 
-local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
-  if not descriptorReady(descriptor) then return false end
+local function descriptorGroundingReason(triggerId, descriptor, fullChatContent)
+  if not descriptorReady(descriptor) then return descriptorReadinessReason(descriptor) end
   local slot = tonumber(descriptor.slot)
-  if not slot then return false end
+  if not slot then return 'slot이 없어 인물과 본문 위치를 대조할 수 없습니다.' end
   local normalizedWindow = normalizeIdentity(storyWindowForSlot(fullChatContent, slot))
-  if normalizedWindow == '' then return false end
+  if normalizedWindow == '' then
+    return 'slot ' .. tostring(slot) .. ' 주변 본문을 찾지 못했습니다.'
+  end
   local normalizedStory = normalizeIdentity(prelude.removeAllNodes(fullChatContent or ''))
   local canonicalAliases = canonicalLorebookAliasMap(triggerId)
   for _, identity in ipairs(descriptor.identities or {}) do
@@ -712,9 +750,15 @@ local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
         break
       end
     end
-    if not found then return false end
+    if not found then
+      return '캐릭터 "' .. name .. '"을(를) slot ' .. tostring(slot) .. ' 주변 본문에서 확인하지 못했습니다.'
+    end
   end
-  return true
+  return ''
+end
+
+local function descriptorGroundedAtSlot(triggerId, descriptor, fullChatContent)
+  return descriptorGroundingReason(triggerId, descriptor, fullChatContent) == ''
 end
 
 local function sanitizeGroundedScenes(triggerId, response, fullChatContent)
@@ -792,6 +836,21 @@ local function decodeSingleDescriptor(raw, wantKeyVisual)
   return nil
 end
 
+local function descriptorCandidateFailure(triggerId, candidate, response, fullChatContent, wantKeyVisual)
+  local readinessReason = descriptorReadinessReason(candidate)
+  if readinessReason ~= '' then return readinessReason end
+  if not descriptorIsDistinct(candidate, response) then
+    return 'outfit, background, composition이 기존 이미지 설명과 같아 중복 장면으로 판정되었습니다.'
+  end
+  if not wantKeyVisual then
+    local slotReason = descriptorSlotAvailabilityReason(candidate, response, fullChatContent)
+    if slotReason ~= '' then return slotReason end
+    local groundingReason = descriptorGroundingReason(triggerId, candidate, fullChatContent)
+    if groundingReason ~= '' then return groundingReason end
+  end
+  return ''
+end
+
 local function requestOneDescriptor(triggerId, response, fullChatContent, wantKeyVisual)
   local story = trimText(prelude.removeAllNodes(fullChatContent or ''))
   story = insertSlots(story)
@@ -847,10 +906,12 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     'Previously established temporary extras:', extraRegistry,
     'Story:', story,
   }, '\n\n')
+  local lastFailure = '보조 모델이 유효한 이미지 설명을 반환하지 않았습니다.'
   for attempt = 1, 2 do
     local retryNote = ''
     if attempt == 2 then
-      retryNote = '\n\nThe previous answer was malformed, incomplete, or duplicated an existing shot. Rewrite all five prose fields and choose a genuinely different story moment.'
+      retryNote = '\n\nPrevious candidate rejection: ' .. lastFailure ..
+        '\nCorrect exactly that rejection while preserving every already valid image descriptor. Return one complete replacement descriptor only.'
     end
     local prompt = {
       { role = 'system', content = 'You create one missing structured image descriptor at a time. Output only the requested data.' },
@@ -859,14 +920,23 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     local ok, llmResponse = pcall(axLLM, triggerId, prompt, false, { streaming = false })
     if ok and type(llmResponse) == 'table' and llmResponse.success then
       local candidate = decodeSingleDescriptor(llmResponse.result, wantKeyVisual)
-      local slotReady = wantKeyVisual or descriptorSlotIsAvailable(candidate, response, fullChatContent)
-      local grounded = wantKeyVisual or descriptorGroundedAtSlot(triggerId, candidate, fullChatContent)
-      if descriptorReady(candidate) and descriptorIsDistinct(candidate, response) and slotReady and grounded then
-        return candidate
+      if not candidate then
+        lastFailure = '응답에서 해석 가능한 단일 이미지 설명 구조를 찾지 못했습니다.'
+      else
+        lastFailure = descriptorCandidateFailure(
+          triggerId, candidate, response, fullChatContent, wantKeyVisual)
+        if lastFailure == '' then return candidate, '' end
       end
+    elseif not ok then
+      lastFailure = '보조 모델 요청 중 예외가 발생했습니다: ' .. tostring(llmResponse)
+    elseif type(llmResponse) == 'table' then
+      lastFailure = '보조 모델 요청이 실패했습니다: ' ..
+        tostring(llmResponse.error or llmResponse.result or '상세 응답 없음')
+    else
+      lastFailure = '보조 모델이 올바른 응답 객체를 반환하지 않았습니다.'
     end
   end
-  return nil
+  return nil, lastFailure
 end
 
 local function assignSceneSlots(response, fullChatContent)
@@ -895,17 +965,24 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
   end
 
   if not descriptorReady(response.scenes[1] or response.keyvis) then
-    local seedScene = requestOneDescriptor(triggerId, response, fullChatContent, false)
+    local seedScene, seedFailure = requestOneDescriptor(triggerId, response, fullChatContent, false)
     if not descriptorReady(seedScene) then
-      return error('정상 이미지 설명이 하나도 없어 첫 씬을 두 번 새로 요청했지만 생성하지 못했습니다.')
+      return response, {{
+        kind = 'scene', ordinal = 1,
+        reason = '정상 이미지 설명이 하나도 없어 첫 씬을 두 번 새로 요청했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(seedFailure),
+      }}
     end
     table.insert(response.scenes, seedScene)
   end
 
   if (keyVisualPolicy == '1' or keyVisualPolicy == '항상 포함') and not response.keyvis then
-    local keyVisual = requestOneDescriptor(triggerId, response, fullChatContent, true)
+    local keyVisual, keyVisualFailure = requestOneDescriptor(triggerId, response, fullChatContent, true)
     if not descriptorReady(keyVisual) then
-      return error('누락된 키비주얼 설명을 두 번 재작성했지만 생성하지 못했습니다.')
+      assignSceneSlots(response, fullChatContent)
+      return response, {{
+        kind = 'keyvis', ordinal = 1,
+        reason = '누락된 키비주얼 설명을 두 번 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(keyVisualFailure),
+      }}
     end
     keyVisual.slot = nil
     response.keyvis = keyVisual
@@ -915,9 +992,13 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
   local imageCount = #response.scenes + (response.keyvis and 1 or 0)
   while imageCount < target do
     local ordinal = imageCount + 1
-    local candidate = requestOneDescriptor(triggerId, response, fullChatContent, false)
+    local candidate, candidateFailure = requestOneDescriptor(triggerId, response, fullChatContent, false)
     if not candidate or not descriptorReady(candidate) then
-      return error('누락된 이미지 설명 ' .. tostring(ordinal) .. '을 두 번 재작성했지만 생성하지 못했습니다.')
+      assignSceneSlots(response, fullChatContent)
+      return response, {{
+        kind = 'scene', ordinal = ordinal,
+        reason = '누락된 이미지 설명 ' .. tostring(ordinal) .. '을 두 번 재작성했지만 생성하지 못했습니다. 상세 사유: ' .. tostring(candidateFailure),
+      }}
     end
     table.insert(response.scenes, candidate)
     imageCount = imageCount + 1
@@ -928,7 +1009,7 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
     imageCount = imageCount - 1
   end
   assignSceneSlots(response, fullChatContent)
-  return response
+  return response, {}
 end
 
 local function buildPresetPrompt(triggerId, desc)
@@ -1084,7 +1165,9 @@ return {
   updateExtraRegistry = updateExtraRegistry,
   validateResponseImageCount = validateResponseImageCount,
   completeResponseImageCount = completeResponseImageCount,
+  requestOneDescriptor = requestOneDescriptor,
   normalizeDescriptorShape = normalizeDescriptorShape,
+  descriptorReadinessReason = descriptorReadinessReason,
   sanitizeResponseDescriptors = sanitizeResponseDescriptors,
   sanitizeSceneSlots = sanitizeSceneSlots,
   sanitizeGroundedScenes = sanitizeGroundedScenes,
@@ -1225,6 +1308,20 @@ def _upgrade_on_output_lua(content: str) -> str:
 local function completeResponseAtOutputBoundary(gen, response)
   return gen.sanitizeResponseDescriptors(response)
 end
+
+local function escapeInlineFailure(value)
+  local text = tostring(value or '알 수 없는 오류')
+  text = text:gsub('[\r\n]+', ' '):gsub('%s+', ' ')
+  text = text:gsub('&', '&amp;'):gsub('<', '&lt;'):gsub('>', '&gt;')
+  text = text:gsub('"', '&quot;'):gsub("'", '&#39;')
+  return text
+end
+
+local function formatInlineFailure(label, reason)
+  return '<blockquote class="lb-xnai-inline-error"><strong>' ..
+    escapeInlineFailure(label) .. ' 생성 실패</strong><br>상세 사유: ' ..
+    escapeInlineFailure(reason) .. '</blockquote>'
+end
 """
     main_anchor = "---@param tid string\n---@param output string"
     if "completeResponseAtOutputBoundary" not in content:
@@ -1236,14 +1333,17 @@ end
     local stackItem = {"""
     policy_replacement = """    local keyVisualPolicy = getGlobalVar(tid, 'toggle_lb-xnai.keyVisual') or '0'
     response = gen.sanitizeResponseDescriptors(response)
-    local completionOk, completionResult = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
+    local completionOk, completionResult, planningFailures = pcall(gen.completeResponseImageCount, tid, response, fullChatContent)
     if not completionOk or not completionResult then
       return fullChatContent, '<lb-lazy id="lb-xnai">오류: 누락되거나 중복된 이미지 설명을 재작성하지 못했습니다. ' .. tostring(completionResult or '') .. '</lb-lazy>'
     end
+    if type(planningFailures) ~= 'table' then planningFailures = {} end
     response = completeResponseAtOutputBoundary(gen, completionResult)
-    local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
-    if not imageCountValid then
-      return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
+    if #planningFailures == 0 then
+      local imageCountValid, imageCountError = gen.validateResponseImageCount(tid, response)
+      if not imageCountValid then
+        return fullChatContent, '<lb-lazy id="lb-xnai">오류: 설정한 이미지 장수와 맞지 않습니다. ' .. imageCountError .. '</lb-lazy>'
+      end
     end
     gen.updateExtraRegistry(tid, response)
 
@@ -1254,8 +1354,14 @@ end
     end
 
     return slotted .. '\\n\\n<lb-xnai kv />', '<lb-lazy id="lb-xnai" />'"""
-    placement_replacement = """    if inlays['-1'] then
-      local keyVisualNode = '<lb-xnai kv>' .. inlays['-1'] .. '</lb-xnai>'
+    placement_replacement = """    local keyVisualNode
+    if inlays['-1'] then
+      keyVisualNode = '<lb-xnai kv>' .. inlays['-1'] .. '</lb-xnai>'
+    elseif generationFailures['-1'] then
+      keyVisualNode = formatInlineFailure(
+        generationFailures['-1'].label, generationFailures['-1'].reason)
+    end
+    if keyVisualNode then
       local keyVisualPosition = getGlobalVar(tid, 'toggle_lb-xnai.kv.position') or '0'
       if keyVisualPosition == '0' then
         return keyVisualNode .. '\\n\\n' .. slotted, '<lb-lazy id="lb-xnai" />'
@@ -1264,6 +1370,9 @@ end
     end
 
     if keyVisualPolicy == '2' then
+      return slotted, '<lb-lazy id="lb-xnai" />'
+    end
+    if #planningFailures > 0 then
       return slotted, '<lb-lazy id="lb-xnai" />'
     end
     return slotted .. '\\n\\n<lb-xnai kv />', '<lb-lazy id="lb-xnai" />'"""
@@ -1282,15 +1391,27 @@ end
 """
     generation_replacement = """    ---@type table<string, string>
     local inlays = {}
-    local plannedCount = #(response.scenes or {}) + (response.keyvis and 1 or 0)
+    local generationFailures = {}
+    local plannedCount = #(response.scenes or {}) + (response.keyvis and 1 or 0) + #planningFailures
     local generatedCount = 0
-    local failedCount = 0
+    local failedCount = #planningFailures
     local firstFailure = ''
+    local failureMessages = {}
+    for _, failure in ipairs(planningFailures) do
+      local reason = tostring(failure.reason or '이미지 설명 생성에 실패했습니다.')
+      table.insert(failureMessages, reason)
+      if firstFailure == '' then firstFailure = reason end
+    end
 """
     if "local generatedCount = 0" not in content:
         if generation_anchor not in content:
             raise ValueError("Source module output hook cannot attach generation diagnostics")
         content = content.replace(generation_anchor, generation_replacement, 1)
+    content = content.replace(
+        "    for _, scene in ipairs(response.scenes or {}) do\n      local slot = tostring(scene.slot)",
+        "    for sceneIndex, scene in ipairs(response.scenes or {}) do\n      local slot = tostring(scene.slot)",
+        1,
+    )
     content = content.replace(
         """        if ok and inlay then
           inlays['-1'] = inlay
@@ -1300,7 +1421,10 @@ end
           generatedCount = generatedCount + 1
         else
           failedCount = failedCount + 1
-          if firstFailure == '' then firstFailure = tostring(inlay) end
+          local reason = tostring(inlay or 'ComfyUI가 빈 결과를 반환했습니다.')
+          generationFailures['-1'] = { label = '키비주얼', reason = reason }
+          table.insert(failureMessages, reason)
+          if firstFailure == '' then firstFailure = reason end
         end""",
         1,
     )
@@ -1313,7 +1437,11 @@ end
           generatedCount = generatedCount + 1
         else
           failedCount = failedCount + 1
-          if firstFailure == '' then firstFailure = tostring(inlay) end
+          local reason = tostring(inlay or 'ComfyUI가 빈 결과를 반환했습니다.')
+          local ordinal = (response.keyvis and 1 or 0) + sceneIndex
+          generationFailures[slot] = { label = '이미지 ' .. tostring(ordinal), reason = reason }
+          table.insert(failureMessages, reason)
+          if firstFailure == '' then firstFailure = reason end
         end""",
         1,
     )
@@ -1324,10 +1452,8 @@ end
       '; planned=' .. tostring(plannedCount) ..
       '; generated=' .. tostring(generatedCount) ..
       '; failed=' .. tostring(failedCount) ..
-      '; firstFailure=' .. firstFailure)
-    if failedCount > 0 then
-      return fullChatContent, '<lb-lazy id="lb-xnai">오류: ' .. tostring(plannedCount) .. '장 중 ' .. tostring(failedCount) .. '장의 ComfyUI 생성에 실패했습니다. ' .. firstFailure .. '</lb-lazy>'
-    end
+      '; firstFailure=' .. firstFailure ..
+      '; failures=' .. table.concat(failureMessages, ' | '))
     table.insert(xnaiState, stackItem)
     xnaiState = select(1, gen.persistStateAndHistory(tid, xnaiState))"""
     if "lb-xnai-last-generation-debug" not in content:
@@ -1344,18 +1470,38 @@ end
     slot_replacement = """      local replacement
       if inlays[slot] then
         replacement = '<lb-xnai scene="' .. slot .. '">' .. inlays[slot] .. '</lb-xnai>'
+      elseif generationFailures[slot] then
+        replacement = formatInlineFailure(
+          generationFailures[slot].label, generationFailures[slot].reason)
       else
         replacement = '<lb-xnai scene="' .. slot .. '" />'
       end
       local replaced
-      slotted, replaced = slotted:gsub('%[Slot%s+' .. slot .. '%]', replacement)
-      if replaced == 0 and inlays[slot] then
+      local safeReplacement = replacement:gsub('%%', '%%%%')
+      slotted, replaced = slotted:gsub('%[Slot%s+' .. slot .. '%]', safeReplacement)
+      if replaced == 0 and (inlays[slot] or generationFailures[slot]) then
         slotted = slotted .. '\\n\\n' .. replacement
       end"""
     if "local replaced" not in content:
         if slot_anchor not in content:
             raise ValueError("Source module output hook cannot attach unmatched image placement")
         content = content.replace(slot_anchor, slot_replacement, 1)
+    content = content.replace(
+        "    slotted = restoreNodes(slotted)\n",
+        """    slotted = restoreNodes(slotted)
+    local planningFailureNodes = {}
+    for _, failure in ipairs(planningFailures) do
+      local label = failure.kind == 'keyvis'
+        and '키비주얼'
+        or ('이미지 ' .. tostring(failure.ordinal or '?'))
+      table.insert(planningFailureNodes, formatInlineFailure(label, failure.reason))
+    end
+    if #planningFailureNodes > 0 then
+      slotted = slotted .. '\\n\\n' .. table.concat(planningFailureNodes, '\\n\\n')
+    end
+""",
+        1,
+    )
     content = content.replace(
         "return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
         "return fullChatContent, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수와 맞지 않습니다. '",
@@ -1460,7 +1606,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.20-krea2"
+        data["character_version"] = "4.4.21-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")

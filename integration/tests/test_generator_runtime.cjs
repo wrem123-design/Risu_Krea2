@@ -189,6 +189,26 @@ local meetingScene = {
 }
 assert(gen.descriptorGroundedAtSlot('test', meetingScene, groundingStory) == true,
   'a grounded extra and canonical character meeting scene was rejected')
+
+queue = {
+  { scenes = {{
+    name = 'Broken retry scene', character_count = 1,
+    identities = {{ identity_key = 'Broken retry scene', name = 'Broken retry scene', source = 'extra', appearance = 'fixed appearance' }},
+    appearance = 'complete physical appearance', outfit = '',
+    background = 'quiet test room', composition = 'centered test framing',
+    details = 'soft test lighting', slot = 0
+  }} },
+  ${descriptor('Retry Scene', 'black coat', 'quiet test room', 'centered test framing', 0)}
+}
+local retryCandidate, retryFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} }, 'Retry Scene appears in the quiet test room.', false)
+assert(retryCandidate and retryCandidate.name == 'Retry Scene',
+  'a focused descriptor retry did not recover with the valid second candidate')
+assert(retryFailure == '', 'a successful focused retry retained a failure state')
+assert(lastPromptText:find('Previous candidate rejection:', 1, true),
+  'the second focused retry did not receive the exact first rejection reason')
+assert(lastPromptText:find('outfit', 1, true),
+  'the focused retry prompt did not identify the missing outfit field')
 return true
 `;
 
@@ -200,7 +220,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.20.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.21.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));
@@ -220,6 +240,111 @@ return true
       return true
     `);
     if (syntaxResult !== true) throw new Error('onOutput syntax check failed');
+    const partialResult = await lua.doString(`
+      local savedState = {}
+      local savedDebug = ''
+      function getGlobalVar(_, name)
+        if name == 'toggle_lb-xnai.generation' then return '0' end
+        if name == 'toggle_lb-xnai.keyVisual' then return '2' end
+        if name == 'toggle_lb-xnai.imageCount' then return '3' end
+        return ''
+      end
+      function getState(_, name)
+        if name == 'lb-xnai-stack' then return savedState end
+        return nil
+      end
+      function setState(_, name, value)
+        if name == 'lb-xnai-stack' then savedState = value end
+      end
+      function setChatVar(_, name, value)
+        if name == 'lb-xnai-last-generation-debug' then savedDebug = value end
+      end
+      local response = {
+        scenes = {
+          { name = 'A', slot = 0 },
+          { name = 'B', slot = 1 },
+          { name = 'C', slot = 2 },
+        }
+      }
+      local genMock = {
+        sanitizeResponseDescriptors = function(value) return value end,
+        completeResponseImageCount = function() return response, {} end,
+        validateResponseImageCount = function() return true, '' end,
+        updateExtraRegistry = function() end,
+        generate = function(_, descriptor)
+          if descriptor.name == 'B' then
+            error('simulated ComfyUI timeout <script>alert(1)</script>')
+          end
+          return '{{inlay::success-' .. descriptor.name:lower() .. '}}'
+        end,
+        persistStateAndHistory = function(_, state)
+          savedState = state
+          return state, ''
+        end,
+        insertSlots = function()
+          return '[Slot 0]\\n\\nParagraph A\\n\\n[Slot 1]\\n\\nParagraph B\\n\\n[Slot 2]\\n\\nParagraph C'
+        end,
+      }
+      prelude = {
+        queryNodes = function() return {{ content = 'decoded' }} end,
+        toon = { decode = function() return response end },
+        import = function() return genMock end,
+        extractTagName = function() return nil end,
+        escMatch = function(value) return value end,
+      }
+      local compiled, compileError = load(onOutputSource)
+      assert(compiled, compileError)
+      local onOutput = compiled()
+      local rendered, lazy = onOutput('test', '<lb-xnai>decoded</lb-xnai>',
+        'Paragraph A\\n\\nParagraph B\\n\\nParagraph C', 7)
+      assert(rendered:find('{{inlay::success-a}}', 1, true),
+        'the first successful image was discarded after a later failure')
+      assert(rendered:find('{{inlay::success-c}}', 1, true),
+        'a successful image after the failed image was discarded')
+      assert(rendered:find('이미지 2 생성 실패', 1, true),
+        'the failed image did not leave an inline error at its story slot')
+      assert(rendered:find('simulated ComfyUI timeout', 1, true),
+        'the inline image error omitted the detailed failure reason')
+      assert(rendered:find('&lt;script&gt;', 1, true)
+          and not rendered:find('<script>', 1, true),
+        'the detailed failure reason was not escaped before HTML rendering')
+      assert(not rendered:find('<lb-xnai scene="1" />', 1, true),
+        'the failed image left a silent empty placeholder')
+      assert(lazy == '<lb-lazy id="lb-xnai" />',
+        'a per-image failure still replaced the full result with a global error')
+      assert(#savedState == 1, 'partial generation state was not persisted')
+      assert(savedDebug:find('generated=2', 1, true) and savedDebug:find('failed=1', 1, true),
+        'partial generation diagnostics were not recorded')
+
+      savedState = {}
+      response = { scenes = {
+        { name = 'A', slot = 0 },
+        { name = 'B', slot = 1 },
+      } }
+      genMock.completeResponseImageCount = function()
+        return response, {{
+          kind = 'scene', ordinal = 3,
+          reason = '필수 필드 outfit이 비어 있어 두 번의 보완 요청이 거절되었습니다.',
+        }}
+      end
+      genMock.generate = function(_, descriptor)
+        return '{{inlay::planned-' .. descriptor.name:lower() .. '}}'
+      end
+      local plannedRendered, plannedLazy = onOutput(
+        'test', '<lb-xnai>decoded</lb-xnai>',
+        'Paragraph A\\n\\nParagraph B\\n\\nParagraph C', 8)
+      assert(plannedRendered:find('{{inlay::planned-a}}', 1, true)
+          and plannedRendered:find('{{inlay::planned-b}}', 1, true),
+        'valid planned scenes were discarded when the third descriptor repair failed')
+      assert(plannedRendered:find('이미지 3 생성 실패', 1, true),
+        'the missing third descriptor did not leave a final inline error')
+      assert(plannedRendered:find('필수 필드 outfit', 1, true),
+        'the planning failure did not expose its exact rejection reason')
+      assert(plannedLazy == '<lb-lazy id="lb-xnai" />',
+        'a focused planning failure still replaced partial output with a global error')
+      return true
+    `);
+    if (partialResult !== true) throw new Error('partial output preservation check failed');
     process.stdout.write('generator runtime: OK\n');
   } finally {
     lua.global.close();

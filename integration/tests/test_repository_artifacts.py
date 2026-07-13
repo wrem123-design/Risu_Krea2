@@ -36,15 +36,15 @@ HOOK_CORS_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.20 module artifact."""
+    """Return the single published Krea2 4.4.21 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.20" in path.name
+        if "Krea2 4.4.21" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.20 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.21 module, found {matches}")
     return matches[0]
 
 
@@ -136,6 +136,9 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("normalizeDescriptorShape", builder.GENERATOR_LUA)
         self.assertIn("sanitizeResponseDescriptors", builder.GENERATOR_LUA)
         self.assertIn("for attempt = 1, 2", builder.GENERATOR_LUA)
+        self.assertIn("descriptorReadinessReason", builder.GENERATOR_LUA)
+        self.assertIn("Previous candidate rejection:", builder.GENERATOR_LUA)
+        self.assertIn("상세 사유:", builder.GENERATOR_LUA)
         self.assertIn("descriptorIsDistinct", builder.GENERATOR_LUA)
         self.assertIn("resolveSceneSelectionGuidance", builder.GENERATOR_LUA)
         self.assertIn("castCoverageSummary", builder.GENERATOR_LUA)
@@ -167,13 +170,17 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("return fullChatContent, '<lb-lazy", on_output)
         self.assertNotIn("return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수", on_output)
 
-        self.assertIn("lb-xnai.gen.v4420", entries)
-        self.assertEqual(entries["lb-xnai.gen.v4420"], entries["lb-xnai.gen"])
-        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4420')", on_output)
+        self.assertIn("lb-xnai.gen.v4421", entries)
+        self.assertEqual(entries["lb-xnai.gen.v4421"], entries["lb-xnai.gen"])
+        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4421')", on_output)
         self.assertIn("gen.sanitizeResponseDescriptors", on_output)
-        self.assertIn("if failedCount > 0 then", on_output)
+        self.assertIn("local generationFailures = {}", on_output)
+        self.assertIn("generationFailures[slot]", on_output)
+        self.assertIn("formatInlineFailure", on_output)
+        self.assertIn("planningFailures", on_output)
+        self.assertNotIn("if failedCount > 0 then\n      return fullChatContent", on_output)
         self.assertIn(
-            "prelude.import(tid, 'lb-xnai.gen.v4420')",
+            "prelude.import(tid, 'lb-xnai.gen.v4421')",
             entries["lb-xnai.lb.onInput"],
         )
         self.assertIn(
@@ -275,13 +282,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         }
         self.assertIn("gen.updateExtraRegistry(tid, response)", entries["lb-xnai.lb.onOutput"])
 
-    def test_module_is_valid_positive_only_krea2_4419_archive(self) -> None:
+    def test_module_is_valid_positive_only_krea2_4421_archive(self) -> None:
         with zipfile.ZipFile(module_path()) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.20")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.21")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
