@@ -126,6 +126,10 @@ an unrelated name mentioned only elsewhere is not sufficient to claim a canonica
 discarded and rewritten. A complete first-appearance identity explicitly marked `source=extra`
 may bootstrap without a canonical alias, then enters the chat-scoped temporary registry after
 successful generation. A known lorebook identity cannot bypass grounding by claiming `extra`.
+When a focused scene reply declares more visible people than identity rows, the generator
+first restores only canonical or chat-scoped extra profiles whose names are explicitly
+present in the descriptor prose. It preserves the scene text and character count; unknown
+people still use the existing focused retry path instead of being invented or dropped.
 Single-person extras still emit a routing name, but Hooking Manager applies a LoRA only
 when that exact alias was explicitly configured; ordinary unmapped extras therefore bypass it.
 The final Krea2 appearance block is assembled from every descriptor identity's immutable

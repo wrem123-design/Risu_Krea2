@@ -393,6 +393,51 @@ local function canonicalLorebookAliasMap(triggerId)
   return aliasMap
 end
 
+local function canonicalLorebookProfiles(triggerId)
+  local profiles = {}
+  local book = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
+  local content = book and book.content or ''
+  content = content:gsub('\r\n', '\n'):gsub('\r', '\n')
+  local aliases = nil
+  local appearanceLines = {}
+  local order = 0
+
+  local function flushProfile()
+    local appearance = trimText(table.concat(appearanceLines, '\n'))
+    if type(aliases) == 'table' and #aliases > 0 and appearance ~= '' then
+      order = order + 1
+      table.insert(profiles, {
+        aliases = aliases,
+        identity_key = normalizeIdentity(aliases[1]),
+        name = aliases[1],
+        source = 'lorebook',
+        appearance = appearance,
+        order = order,
+      })
+    end
+  end
+
+  for line in (content .. '\n'):gmatch('(.-)\n') do
+    local heading = line:match('^##+%s+(.+)$')
+    if heading then
+      flushProfile()
+      local english, translated = heading:match('^%s*(.-)%s*/%s*(.-)%s*$')
+      aliases = {}
+      for _, alias in ipairs(splitLorebookAliases(english or heading)) do
+        table.insert(aliases, alias)
+      end
+      for _, alias in ipairs(splitLorebookAliases(translated or '')) do
+        table.insert(aliases, alias)
+      end
+      appearanceLines = {}
+    elseif aliases then
+      table.insert(appearanceLines, line)
+    end
+  end
+  flushProfile()
+  return profiles
+end
+
 local function canonicalLorebookNames(triggerId)
   local names = {}
   for key in pairs(canonicalLorebookAliasMap(triggerId)) do names[key] = true end
@@ -586,6 +631,110 @@ local function identityCardinalityMismatch(desc)
   local actual = type(desc.identities) == 'table' and #desc.identities or 0
   if actual == expected then return nil, nil end
   return expected, actual
+end
+
+local function identityMentionScore(desc, aliases)
+  local fields = {
+    { value = desc.name, weight = 100 },
+    { value = desc.composition, weight = 80 },
+    { value = desc.appearance, weight = 60 },
+    { value = desc.outfit, weight = 40 },
+    { value = desc.details, weight = 20 },
+    { value = desc.background, weight = 10 },
+  }
+  local bestScore = 0
+  local bestAlias = ''
+  for _, alias in ipairs(aliases or {}) do
+    local aliasKey = normalizeIdentity(alias)
+    if aliasKey ~= '' then
+      for _, field in ipairs(fields) do
+        local fieldKey = normalizeIdentity(field.value)
+        if fieldKey ~= '' and fieldKey:find(aliasKey, 1, true) then
+          if field.weight > bestScore then
+            bestScore = field.weight
+            bestAlias = alias
+          end
+        end
+      end
+    end
+  end
+  return bestScore, bestAlias
+end
+
+local function knownIdentityProfiles(triggerId)
+  local profiles = canonicalLorebookProfiles(triggerId)
+  local registry = getState(triggerId, 'lb-xnai-extra-registry-v1') or {}
+  if type(registry) ~= 'table' then registry = {} end
+  local order = #profiles
+  for _, saved in ipairs(registry) do
+    local key = trimText(saved.identity_key)
+    local name = trimText(saved.name)
+    local appearance = trimText(saved.appearance)
+    if key ~= '' and name ~= '' and appearance ~= '' then
+      order = order + 1
+      table.insert(profiles, {
+        aliases = { name },
+        identity_key = key,
+        name = name,
+        source = 'extra',
+        appearance = appearance,
+        order = order,
+      })
+    end
+  end
+  return profiles
+end
+
+local function backfillKnownIdentities(triggerId, desc)
+  local expected, actual = identityCardinalityMismatch(desc)
+  if not expected or actual >= expected then return desc end
+
+  local existing = {}
+  local canonicalAliases = canonicalLorebookAliasMap(triggerId)
+  for _, identity in ipairs(desc.identities or {}) do
+    local nameKey = normalizeIdentity(identity.name)
+    local identityKey = normalizeIdentity(identity.identity_key)
+    if nameKey ~= '' then existing[nameKey] = true end
+    if identityKey ~= '' then existing[identityKey] = true end
+    local aliases = canonicalAliases[nameKey] or canonicalAliases[identityKey]
+    for _, alias in ipairs(aliases or {}) do existing[normalizeIdentity(alias)] = true end
+  end
+
+  local candidates = {}
+  for _, profile in ipairs(knownIdentityProfiles(triggerId)) do
+    local duplicate = existing[normalizeIdentity(profile.identity_key)] == true
+    for _, alias in ipairs(profile.aliases or {}) do
+      if existing[normalizeIdentity(alias)] then duplicate = true break end
+    end
+    if not duplicate then
+      local score, matchedAlias = identityMentionScore(desc, profile.aliases)
+      if score > 0 then
+        table.insert(candidates, {
+          profile = profile,
+          score = score,
+          matchedAlias = matchedAlias,
+        })
+      end
+    end
+  end
+  table.sort(candidates, function(left, right)
+    if left.score == right.score then
+      return left.profile.order < right.profile.order
+    end
+    return left.score > right.score
+  end)
+
+  for _, candidate in ipairs(candidates) do
+    if #desc.identities >= expected then break end
+    local profile = candidate.profile
+    table.insert(desc.identities, {
+      identity_key = profile.identity_key,
+      name = candidate.matchedAlias ~= '' and candidate.matchedAlias or profile.name,
+      source = profile.source,
+      appearance = profile.appearance,
+    })
+  end
+  return normalizeDescriptorShape(desc)
 end
 
 local function descriptorRepairSnapshot(desc)
@@ -1006,6 +1155,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
       if not candidate then
         lastFailure = '응답에서 해석 가능한 단일 이미지 설명 구조를 찾지 못했습니다.'
       else
+        candidate = backfillKnownIdentities(triggerId, candidate)
         if attempt >= 3 then
           candidate = mergeIdentityCardinalityRepair(identityRepairBase, candidate)
         end
@@ -1271,6 +1421,7 @@ return {
   sanitizeGroundedScenes = sanitizeGroundedScenes,
   descriptorGroundedAtSlot = descriptorGroundedAtSlot,
   isCanonicalLorebookName = isCanonicalLorebookName,
+  backfillKnownIdentities = backfillKnownIdentities,
 }
 """
 

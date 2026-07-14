@@ -62,10 +62,10 @@ prelude = {
   getPriorityLoreBook = function(_, name)
     if name == 'lb-xnai.lb.extra' then
       return { content = [[## Oh Deok-gu / 오덕규
-Canonical appearance
+Oh Deok-gu canonical physical appearance with a round face, thick round glasses, and a chubby build.
 
 ### Stella, Song Hee-jin / 스텔라, 송희진
-Shared aliases]] }
+Song Hee-jin canonical physical appearance with a small oval face and long dark hair.]] }
     end
     if name == '프리셋 1' then
       return { content = [[[Positive]
@@ -307,6 +307,99 @@ assert(lastPromptText:find('Canonical character appearances:', 1, true),
   'the identity repair did not retain canonical profile context')
 assert(lastPromptText:find('Previously established temporary extras:', 1, true),
   'the identity repair did not retain temporary extra context')
+
+states['lb-xnai-extra-registry-v1'] = {
+  {
+    identity_key = 'kim_do_hee', name = 'Kim Do-hee',
+    appearance = 'Kim Do-hee stable extra appearance with an athletic build and tied-back hair'
+  }
+}
+gen.refreshExtraRegistry('test')
+local knownExtraMismatch = {
+  scenes = {{
+    name = 'Oh Deok-gu and Kim Do-hee', character_count = 2,
+    identities = {{
+      identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+      appearance = 'Oh Deok-gu canonical physical appearance'
+    }},
+    appearance = 'Oh Deok-gu studies Kim Do-hee with an analytical expression',
+    outfit = 'Oh Deok-gu wears a gray hoodie while Kim Do-hee wears black athletic clothing',
+    background = 'a bright private Pilates studio with cream walls and exercise equipment',
+    composition = 'Oh Deok-gu faces Kim Do-hee while she blocks his raised smartphone',
+    details = 'clean afternoon light preserves both faces and realistic fabric texture', slot = 0
+  }}
+}
+queue = { knownExtraMismatch, knownExtraMismatch, knownExtraMismatch, knownExtraMismatch }
+local knownExtraCandidate, knownExtraFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} },
+  'Oh Deok-gu entered the studio. Kim Do-hee blocked his smartphone and ordered him to leave.', false)
+assert(knownExtraCandidate and #knownExtraCandidate.identities == 2,
+  'a known temporary extra was not deterministically backfilled into the malformed scene')
+assert(knownExtraFailure == '', 'known-extra backfill retained a failure state')
+assert(#queue == 3, 'known-extra backfill unnecessarily asked the weak model to repeat the descriptor')
+assert(knownExtraCandidate.identities[1].name == 'Oh Deok-gu',
+  'known-extra backfill replaced the existing canonical identity')
+assert(knownExtraCandidate.identities[2].name == 'Kim Do-hee' and
+  knownExtraCandidate.identities[2].source == 'extra',
+  'known-extra backfill did not use the matching chat-scoped registry profile')
+assert(knownExtraCandidate.identities[2].appearance:find('stable extra appearance', 1, true),
+  'known-extra backfill dropped the saved immutable appearance')
+assert(knownExtraCandidate.composition ==
+  'Oh Deok-gu faces Kim Do-hee while she blocks his raised smartphone',
+  'known-extra backfill rewrote valid scene prose')
+
+local knownCanonicalMismatch = {
+  scenes = {{
+    name = 'Kim Do-hee and Song Hee-jin', character_count = 2,
+    identities = {{
+      identity_key = 'kim_do_hee', name = 'Kim Do-hee', source = 'extra',
+      appearance = 'Kim Do-hee stable extra appearance'
+    }},
+    appearance = 'Kim Do-hee watches Song Hee-jin enter with a guarded expression',
+    outfit = 'Kim Do-hee wears black athletic clothing while Song Hee-jin wears an ivory jacket',
+    background = 'a quiet private studio lounge with a glass entrance',
+    composition = 'Kim Do-hee stands in profile as Song Hee-jin walks through the doorway',
+    details = 'soft window light separates both faces and realistic clothing textures', slot = 0
+  }}
+}
+queue = { knownCanonicalMismatch, knownCanonicalMismatch, knownCanonicalMismatch, knownCanonicalMismatch }
+local knownCanonicalCandidate, knownCanonicalFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} },
+  'Kim Do-hee waited near the entrance. Song Hee-jin walked into the studio lounge.', false)
+assert(knownCanonicalCandidate and #knownCanonicalCandidate.identities == 2,
+  'a known canonical identity was not deterministically backfilled into the malformed scene')
+assert(knownCanonicalFailure == '', 'canonical backfill retained a failure state')
+assert(#queue == 3, 'canonical backfill unnecessarily asked the weak model to repeat the descriptor')
+assert(knownCanonicalCandidate.identities[2].name == 'Song Hee-jin' and
+  knownCanonicalCandidate.identities[2].source == 'lorebook',
+  'canonical backfill did not use the matching lorebook profile')
+assert(knownCanonicalCandidate.identities[2].appearance:find(
+  'Song Hee-jin canonical physical appearance', 1, true),
+  'canonical backfill dropped the lorebook appearance')
+
+local unresolvedMismatch = {
+  scenes = {{
+    name = 'Oh Deok-gu and Unknown Visitor', character_count = 2,
+    identities = {{
+      identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+      appearance = 'Oh Deok-gu canonical physical appearance'
+    }},
+    appearance = 'Oh Deok-gu looks toward an unknown visitor',
+    outfit = 'Oh Deok-gu wears a gray hoodie while the visitor wears an unspecified coat',
+    background = 'a plain test hallway',
+    composition = 'Oh Deok-gu stands opposite Unknown Visitor',
+    details = 'neutral light and realistic textures', slot = 0
+  }}
+}
+queue = { unresolvedMismatch, unresolvedMismatch, unresolvedMismatch, unresolvedMismatch }
+local unresolvedCandidate, unresolvedFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} },
+  'Oh Deok-gu saw an Unknown Visitor in the hallway.', false)
+assert(unresolvedCandidate == nil,
+  'an unknown identity was invented or character_count was silently reduced')
+assert(unresolvedFailure:find('identities', 1, true),
+  'an unresolved unknown identity lost the cardinality failure reason')
+assert(#queue == 0, 'an unresolved unknown identity bypassed the existing focused retry path')
 
 local canonicalHelmetScene = {
   name = 'The Frankenstein Helmet', character_count = 1,

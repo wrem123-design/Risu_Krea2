@@ -326,6 +326,13 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("Rejected descriptor snapshot:", entries["lb-xnai.gen"])
         self.assertIn("Existing identity records:", entries["lb-xnai.gen"])
         self.assertIn("identityAppearanceLines", entries["lb-xnai.gen"])
+        self.assertIn("canonicalLorebookProfiles", entries["lb-xnai.gen"])
+        self.assertIn("knownIdentityProfiles", entries["lb-xnai.gen"])
+        self.assertIn("backfillKnownIdentities", entries["lb-xnai.gen"])
+        self.assertIn(
+            "candidate = backfillKnownIdentities(triggerId, candidate)",
+            entries["lb-xnai.gen"],
+        )
         self.assertIn(
             "Current scene appearance, expression, and temporary state:",
             entries["lb-xnai.gen"],
