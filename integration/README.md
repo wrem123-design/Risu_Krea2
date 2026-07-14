@@ -23,7 +23,7 @@ control to `2` to retain focused repair for genuinely missing fields.
 ## PocketRisu setup
 
 1. Open Settings → Modules and import
-   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.22.module.charx`.
+   `E:\Chatbot\Download\모듈\🔦라이트보드 🌠 삽화 Krea2 4.4.23.module.charx`.
    Do not use the main character drag-and-drop importer. Remove or unbind an
    earlier Krea2 copy, then bind the newly imported module to the bot/chat.
 2. In Settings → Other bots → Image generation, select ComfyUI.
@@ -43,7 +43,7 @@ background, composition, and details. The negative prompt is empty.
 Each descriptor targets 280–420 English words. Missing paragraphs are repaired,
 while shorter non-empty prose is retained so a weak auxiliary model does not
 replace a usable response with a worse full rewrite.
-Version 4.4.22 declares `character_count` as 1, 2, or 3. It retains dialogue,
+Version 4.4.23 declares `character_count` as 1, 2, or 3. It retains dialogue,
 mutual gaze, touch, confrontation, and other visible interactions when they are
 part of the selected moment. A single-person descriptor sends the primary
 character's story-matching lorebook alias as an internal routing marker, and Hooking
@@ -51,6 +51,11 @@ Manager applies at most one exactly matched character LoRA. A two- or
 three-person descriptor sends a multi-character marker that always bypasses the
 dynamic LoRA node, preventing one identity LoRA from affecting every face.
 Empty or unmatched single-person names also bypass the dynamic LoRA node.
+Exact names remain only in structured identity data and the temporary internal
+routing marker. Before the positive prompt reaches ComfyUI, all current English,
+Korean, short-name, and identity-key variants in the five prose paragraphs are
+replaced with ordered anonymous subject references. Physical appearance, clothing,
+interaction, setting, and rendering details are preserved.
 The validator still requests targeted rewrites for prose below the documented
 minimums. If a backend reports validation complete with slightly short but
 non-empty prose, the final generator now degrades gracefully instead of blocking
@@ -73,7 +78,7 @@ zero-based indices. Disabled keyvis is enforced both during validation and immed
 before image generation, key-visual position now controls top/bottom placement, and
 saved-history count is clamped to 1–20. Unused NAI-era controls are removed.
 
-The 4.4.22 output hook removes malformed descriptors before any ComfyUI request,
+The 4.4.23 output hook removes malformed descriptors before any ComfyUI request,
 converts a valid disabled key visual into an ordinary scene, and asks the auxiliary
 model twice for every missing descriptor. When a candidate declares two or three
 visible characters but provides fewer identity records, it can make two focused
@@ -133,10 +138,11 @@ people still use the existing focused retry path instead of being invented or dr
 Single-person extras still emit a routing name, but Hooking Manager applies a LoRA only
 when that exact alias was explicitly configured; ordinary unmapped extras therefore bypass it.
 The final Krea2 appearance block is assembled from every descriptor identity's immutable
-`name` and `appearance` record before scene-specific expression or temporary-state prose is
-appended. This prevents a weak scene-level `appearance` field from replacing canonical or
-remembered-extra traits. Single-person routing uses the sole identity's name rather than the
-descriptor title, while multi-person scenes continue to suppress identity LoRAs.
+`appearance` record before scene-specific expression or temporary-state prose is appended.
+This prevents a weak scene-level `appearance` field from replacing canonical or
+remembered-extra traits. Names are then anonymized in the five prose fields; single-person
+routing still uses the sole identity's structured name rather than the descriptor title,
+while multi-person scenes continue to suppress identity LoRAs.
 
 ## Workflow contract
 

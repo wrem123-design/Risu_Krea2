@@ -461,9 +461,9 @@ local canonicalHelmetScene = {
   name = 'The Frankenstein Helmet', character_count = 1,
   identities = {{
     identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
-    appearance = 'Korean man with a slightly chubby physique, a round face, thick-rimmed round glasses, and messy black hair.'
+    appearance = 'Oh Deok-gu, also called 오덕규, is a Korean man with a slightly chubby physique, a round face, thick-rimmed round glasses, and messy black hair.'
   }},
-  appearance = 'Oh Deok-gu leans over the desk with an intensely focused expression while soldering.',
+  appearance = 'Deok-gu leans over the desk with an intensely focused expression while soldering.',
   outfit = 'an oversized stained grey cotton t-shirt',
   background = 'a cluttered warehouse workshop filled with electronic scrap',
   composition = 'close-up shot of his concentrated face and hands working on a helmet',
@@ -481,12 +481,44 @@ assert(capturedImagePrompt:find('[[KREA2_CHARACTER:Oh Deok-gu]]', 1, true),
   'the single-person route used the scene title instead of the identity name')
 assert(not capturedImagePrompt:find('[[KREA2_CHARACTER:The Frankenstein Helmet]]', 1, true),
   'the single-person route retained the invalid scene-title identity')
+local singlePersonPromptBody = capturedImagePrompt
+  :gsub('^%[%[KREA2_PRESET:[^\\r\\n]+%]%]%s*', '')
+  :gsub('^%[%[KREA2_CHARACTER:[^\\r\\n]+%]%]%s*', '')
+for _, leakedName in ipairs({ 'Oh Deok-gu', 'Deok-gu', '오덕규', '덕규' }) do
+  assert(not singlePersonPromptBody:lower():find(leakedName:lower(), 1, true),
+    'the single-person final prompt body leaked a person name: ' .. leakedName)
+end
+assert(singlePersonPromptBody:find('the subject', 1, true),
+  'the single-person final prompt did not retain an anonymous subject reference')
+
+local aliasIdentityScene = {
+  name = '송희진', character_count = 1,
+  identities = {{
+    identity_key = 'song_hee_jin', name = '송희진', source = 'lorebook',
+    appearance = 'Stella, also known as Song Hee-jin and 스텔라, has a small oval face and long dark hair.'
+  }},
+  appearance = 'Hee-jin turns her head while 희진 keeps a restrained expression.',
+  outfit = '송희진 wears an ivory jacket over a charcoal blouse.',
+  background = 'a quiet private lounge',
+  composition = 'a centered waist-up portrait',
+  details = 'soft window light and realistic fabric texture', slot = 50
+}
+gen.generate('test', aliasIdentityScene)
+assert(capturedImagePrompt:find('[[KREA2_CHARACTER:송희진]]', 1, true),
+  'the Korean routing alias was removed before Hooking Manager could read it')
+local aliasPromptBody = capturedImagePrompt
+  :gsub('^%[%[KREA2_PRESET:[^\\r\\n]+%]%]%s*', '')
+  :gsub('^%[%[KREA2_CHARACTER:[^\\r\\n]+%]%]%s*', '')
+for _, leakedName in ipairs({ 'Stella', 'Song Hee-jin', 'Hee-jin', '스텔라', '송희진', '희진' }) do
+  assert(not aliasPromptBody:lower():find(leakedName:lower(), 1, true),
+    'a lorebook alias leaked into the final prompt body: ' .. leakedName)
+end
 
 local multiIdentityScene = {
   name = 'The Feast of the Engineers', character_count = 2,
   identities = {
-    { identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook', appearance = 'canonical Deok-gu appearance' },
-    { identity_key = 'seong_jin', name = '성진', source = 'extra', appearance = 'stable Seong-jin appearance' }
+    { identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook', appearance = 'Deok-gu has narrow eyes and thick round glasses' },
+    { identity_key = 'seong_jin', name = '성진', source = 'extra', appearance = 'Seong-jin has a square jaw and short brown hair' }
   },
   appearance = 'both men eat with contrasting expressions',
   outfit = 'Deok-gu wears a white t-shirt and 성진 wears a dark hoodie',
@@ -495,14 +527,51 @@ local multiIdentityScene = {
   details = 'realistic practical lighting', slot = 35
 }
 gen.generate('test', multiIdentityScene)
-assert(capturedImagePrompt:find('canonical Deok-gu appearance', 1, true),
+assert(capturedImagePrompt:find('narrow eyes and thick round glasses', 1, true),
   'the multi-person final prompt dropped the first identity appearance')
-assert(capturedImagePrompt:find('stable Seong-jin appearance', 1, true),
+assert(capturedImagePrompt:find('square jaw and short brown hair', 1, true),
   'the multi-person final prompt dropped the second identity appearance')
 assert(capturedImagePrompt:find('[[KREA2_MULTI_CHARACTER]]', 1, true),
   'multi-person LoRA suppression marker changed')
 assert(not capturedImagePrompt:find('[[KREA2_CHARACTER:', 1, true),
   'a character LoRA route leaked into a multi-person prompt')
+local multiPersonPromptBody = capturedImagePrompt
+  :gsub('^%[%[KREA2_PRESET:[^\\r\\n]+%]%]%s*', '')
+  :gsub('^%[%[KREA2_MULTI_CHARACTER%]%]%s*', '')
+for _, leakedName in ipairs({ 'Oh Deok-gu', 'Deok-gu', '오덕규', '덕규', '성진', 'Seong-jin' }) do
+  assert(not multiPersonPromptBody:lower():find(leakedName:lower(), 1, true),
+    'the multi-person final prompt body leaked a person name: ' .. leakedName)
+end
+assert(multiPersonPromptBody:find('the primary subject', 1, true),
+  'the multi-person final prompt lost the primary subject distinction')
+assert(multiPersonPromptBody:find('the second subject', 1, true),
+  'the multi-person final prompt lost the second subject distinction')
+
+local threeIdentityScene = {
+  name = 'three-person exchange', character_count = 3,
+  identities = {
+    { identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook', appearance = 'Deok-gu has thick round glasses' },
+    { identity_key = 'seong_jin', name = '성진', source = 'extra', appearance = 'Seong-jin has a square jaw' },
+    { identity_key = 'extra-kang-hyejeong-1', name = '강혜정', source = 'extra', appearance = 'Kang Hyejeong (강혜정) has shoulder-length chestnut hair' }
+  },
+  appearance = 'Oh Deok-gu, 성진, and 강혜정 react with distinct expressions',
+  outfit = 'each participant wears a different neutral-toned casual layer',
+  background = 'a compact workshop meeting area',
+  composition = 'a balanced three-person medium-wide exchange',
+  details = 'soft practical light preserves all three faces and material textures', slot = 51
+}
+gen.generate('test', threeIdentityScene)
+local threePersonPromptBody = capturedImagePrompt
+  :gsub('^%[%[KREA2_PRESET:[^\\r\\n]+%]%]%s*', '')
+  :gsub('^%[%[KREA2_MULTI_CHARACTER%]%]%s*', '')
+assert(threePersonPromptBody:find('the primary subject', 1, true),
+  'the three-person final prompt lost the primary subject distinction')
+assert(threePersonPromptBody:find('the second subject', 1, true),
+  'the three-person final prompt lost the second subject distinction')
+assert(threePersonPromptBody:find('the third subject', 1, true),
+  'the three-person final prompt lost the third subject distinction')
+assert(not threePersonPromptBody:lower():find('kang hyejeong', 1, true),
+  'a readable extra identity-key name leaked into the three-person prompt')
 return true
 `;
 
@@ -514,7 +583,7 @@ return true
     if (result !== true) throw new Error('runtime harness did not return true');
     const modulePath = path.join(
       __dirname, '..', '..', 'module',
-      '🔦라이트보드 🌠 삽화 Krea2 4.4.22.module.charx'
+      '🔦라이트보드 🌠 삽화 Krea2 4.4.23.module.charx'
     );
     const archive = unzipSync(fs.readFileSync(modulePath));
     const card = JSON.parse(Buffer.from(archive['card.json']).toString('utf8'));

@@ -36,15 +36,15 @@ HOOK_CORS_PATCH = (
 
 
 def module_path() -> Path:
-    """Return the single published Krea2 4.4.22 module artifact."""
+    """Return the single published Krea2 4.4.23 module artifact."""
 
     matches = [
         path
         for path in (REPOSITORY / "module").glob("*.module.charx")
-        if "Krea2 4.4.22" in path.name
+        if "Krea2 4.4.23" in path.name
     ]
     if len(matches) != 1:
-        raise AssertionError(f"Expected one Krea2 4.4.22 module, found {matches}")
+        raise AssertionError(f"Expected one Krea2 4.4.23 module, found {matches}")
     return matches[0]
 
 
@@ -174,9 +174,14 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("return fullChatContent, '<lb-lazy", on_output)
         self.assertNotIn("return nil, '<lb-lazy id=\"lb-xnai\">오류: 설정한 이미지 장수", on_output)
 
-        self.assertIn("lb-xnai.gen.v4422", entries)
-        self.assertEqual(entries["lb-xnai.gen.v4422"], entries["lb-xnai.gen"])
-        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4422')", on_output)
+        self.assertIn("lb-xnai.gen.v4423", entries)
+        self.assertEqual(entries["lb-xnai.gen.v4423"], entries["lb-xnai.gen"])
+        self.assertIn("prelude.import(tid, 'lb-xnai.gen.v4423')", on_output)
+        self.assertEqual(
+            on_output.count("local planningFailureNodes = {}"),
+            1,
+            "The output hook duplicated the same planning-failure renderer.",
+        )
         self.assertIn("gen.sanitizeResponseDescriptors", on_output)
         self.assertIn("local generationFailures = {}", on_output)
         self.assertIn("generationFailures[slot]", on_output)
@@ -184,7 +189,7 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("planningFailures", on_output)
         self.assertNotIn("if failedCount > 0 then\n      return fullChatContent", on_output)
         self.assertIn(
-            "prelude.import(tid, 'lb-xnai.gen.v4422')",
+            "prelude.import(tid, 'lb-xnai.gen.v4423')",
             entries["lb-xnai.lb.onInput"],
         )
         self.assertIn(
@@ -292,7 +297,7 @@ class RepositoryArtifactTests(unittest.TestCase):
             self.assertIn("module.risum", archive.namelist())
             card = json.loads(archive.read("card.json").decode("utf-8"))
 
-        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.22")
+        self.assertEqual(card["data"]["name"], "🔦라이트보드 🌠 삽화 Krea2 4.4.23")
         entries = {
             entry["name"]: entry["content"]
             for entry in card["data"]["character_book"]["entries"]
@@ -326,6 +331,11 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("Rejected descriptor snapshot:", entries["lb-xnai.gen"])
         self.assertIn("Existing identity records:", entries["lb-xnai.gen"])
         self.assertIn("identityAppearanceLines", entries["lb-xnai.gen"])
+        self.assertIn("anonymizePromptPersonNames", entries["lb-xnai.gen"])
+        self.assertIn(
+            "Use exact person names only in the structured",
+            entries["lb-xnai.lb"],
+        )
         self.assertIn("canonicalLorebookProfiles", entries["lb-xnai.gen"])
         self.assertIn("knownIdentityProfiles", entries["lb-xnai.gen"])
         self.assertIn("currentResponseExtraProfiles", entries["lb-xnai.gen"])

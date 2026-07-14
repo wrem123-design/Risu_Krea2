@@ -40,8 +40,8 @@ REMOVED_NODE_IDS = {
     296,
 }
 
-MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.22"
-VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4422"
+MODULE_NAME = "🔦라이트보드 🌠 삽화 Krea2 4.4.23"
+VERSIONED_GENERATOR_NAME = "lb-xnai.gen.v4423"
 
 MAIN_INSTRUCTIONS = """You are the illustration planner for a Krea2 natural-language image workflow.
 
@@ -65,11 +65,11 @@ Never substitute a listed canonical character for an unlisted named person who i
 {{getvar::lb-xnai-extra-registry-prompt}}
 </temporary-extra-registry>
 
-For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. `character_count` must be the integer 1, 2, or 3 and equal both the visible identifiable character count and the number of identity records. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the single lorebook alias matching the story and source `lorebook`. Unlisted people use source `extra`, the exact story spelling as their display name, and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. A one-character descriptor emits its focal name to the Hooking Manager; only an exact configured alias activates a LoRA, while unmapped extras safely bypass it. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
+For every image, output `name`, `character_count`, `identities`, and five complete English natural-language fields. Use exact person names only in the structured `name` and `identities[].name` fields required for validation and internal LoRA routing. In all five prose fields, refer to visible people anonymously as `the subject`, `the primary subject`, `the second subject`, or `the third subject`; never repeat a person name or alias there. Each identity record contains a stable `identity_key`, display `name`, `source` (`lorebook` or `extra`), and immutable physical `appearance`. Canonical characters use the single lorebook alias matching the story and source `lorebook`. Unlisted people use source `extra`, the exact story spelling as their display name, and a stable descriptive key with a numeric suffix when needed. `name` identifies the primary focal character and matches one identity record. A one-character descriptor emits its focal name to the Hooking Manager; only an exact configured alias activates a LoRA, while unmapped extras safely bypass it. The assembled prompt should usually total 280–420 words, with concrete visual information rather than repetition:
 
-Before writing a descriptor, silently enumerate every visible identifiable participant in the selected moment. Cardinality is absolute: one visible person requires `character_count: 1` and exactly one identity record; two visible people require `character_count: 2` and exactly two distinct identity records; three visible people require `character_count: 3` and exactly three distinct identity records. Every person named or visibly described in appearance, outfit, composition, or details must have one corresponding identity. Never omit a visible participant or lower `character_count` because that person is absent from the lorebook; create a `source: extra` identity with the exact story name instead.
+Before writing a descriptor, silently enumerate every visible identifiable participant in the selected moment. Cardinality is absolute: one visible person requires `character_count: 1` and exactly one identity record; two visible people require `character_count: 2` and exactly two distinct identity records; three visible people require `character_count: 3` and exactly three distinct identity records. Every person separately described in appearance, outfit, composition, or details must have one corresponding identity. Never omit a visible participant or lower `character_count` because that person is absent from the lorebook; create a `source: extra` identity with the exact story name instead.
 
-1. `appearance` (at least 30 words): name and describe every identifiable participant using fixed age category, skin, build, face shape, eyes, brows, nose, lips, hair, and permanent marks actually supplied by the profiles or story. Keep descriptions person-specific and do not invent conflicting identity traits merely to increase length.
+1. `appearance` (at least 30 words): describe every identifiable participant using fixed age category, skin, build, face shape, eyes, brows, nose, lips, hair, and permanent marks actually supplied by the profiles or story. Keep descriptions person-specific and do not invent conflicting identity traits merely to increase length.
 2. `outfit` (at least 35 words): describe the exact current clothing and accessories of every visible participant, including color, cut, fit, layers, fabric, fasteners, footwear, and continuity. A completed outfit change fully replaces the prior outfit.
 3. `background` (at least 40 words): describe location, architecture, furniture, props, time, weather, depth, and spatial arrangement. Do not add identifiable background people beyond the declared `character_count`.
 4. `composition` (at least 55 words): describe each participant's action, body pose, hand placement, camera angle, framing, subject scale, gaze, head direction, expression, and visual emphasis. Explicitly describe dialogue, mutual eye lines, touch, physical distance, confrontation, or cooperation when those interactions define the selected narrative moment.
@@ -77,7 +77,7 @@ Before writing a descriptor, silently enumerate every visible identifiable parti
 
 Use fluent descriptive sentences and paragraph-like prose, not comma-separated tag lists, weights, quality-token piles, or model-control syntax. Do not output a negative prompt. Do not mention unavailable LoRAs or identity adapters. Base poses on the story only; no source image or depth-control guidance exists.
 
-Return only the required `<lb-xnai>` TOON structure. Each `[Slot N]` marker is a source-story paragraph position, never an image ordinal. For every scene, copy the exact numeric N from the marker nearest the described event; do not number selected scenes sequentially as 0, 1, 2 unless those events truly occur at those first boundaries. Balanced selection should normally span early, middle, and later meaningful boundaries, strongest selection should use the exact boundaries of the strongest events, and later selection should use exact later-story boundaries. Ensure the total number of `scenes` plus an optional `keyvis` follows the image-count setting and the keyvis presence follows the key-visual setting. Never omit or leave blank any of the five fields."""
+Return only the required `<lb-xnai>` TOON structure. Each `[Slot N]` marker is a source-story paragraph position, never an image ordinal. For every scene, copy the exact numeric N from the marker nearest the described event; do not number selected scenes sequentially as 0, 1, 2 unless those events truly occur at those first boundaries. Balanced selection should normally span early, middle, and later meaningful boundaries, strongest selection should use the exact boundaries of the strongest events, and later selection should use exact later-story boundaries."""
 
 JOB_INSTRUCTIONS = """Plan the requested number of richly detailed Krea2 illustrations from the supplied chat and per-bot character profiles. Follow the module's image-count, key-visual, and scene-selection settings. Use meaningful cast coverage only as a soft tie-breaker after story relevance, without inventing or promoting passive people. Each image declares one to three identifiable characters and five non-empty natural-language fields. Preserve every visible participant's fixed appearance, resolve scene-specific clothing and interaction, and return only the requested TOON structure."""
 
@@ -1179,6 +1179,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
     'Scene-selection policy:', resolveSceneSelectionGuidance(triggerId),
     'Story relevance remains primary. Use cast coverage only as a soft tie-breaker: when the story supports an equally meaningful moment, prefer an underrepresented named character or a visible interaction over another repetitive protagonist-only shot. Never invent or promote a passive bystander merely for diversity.',
     'Never substitute a canonical lorebook character for an unlisted named person present in the selected moment. For an unlisted person, use source extra and copy the exact story spelling into identity.name and the focal name. Every declared identity must be named near the copied [Slot N]; an absent creator, owner, memory, message author, or choice-only reference is not visually present.',
+    'Keep exact person names only in the structured name and identities[].name fields. In appearance, outfit, background, composition, and details, use the subject, the primary subject, the second subject, or the third subject instead of any person name or alias.',
     'Return one <lb-xnai> block only, using exactly this TOON shape:',
     '<lb-xnai>', outputShape, '</lb-xnai>',
     'Every descriptor must include one to three identities and five non-empty detailed English prose fields.',
@@ -1309,6 +1310,86 @@ local function completeResponseImageCount(triggerId, response, fullChatContent)
   return response, {}
 end
 
+local function anonymousSubjectLabel(index, characterCount)
+  if characterCount == 1 then return 'the subject' end
+  if index == 1 then return 'the primary subject' end
+  if index == 2 then return 'the second subject' end
+  return 'the third subject'
+end
+
+local function replacePlainCaseInsensitive(text, needle, replacement)
+  text = tostring(text or '')
+  needle = trimText(needle)
+  if needle == '' then return text end
+  local loweredText = text:lower()
+  local loweredNeedle = needle:lower()
+  local parts = {}
+  local cursor = 1
+  while true do
+    local first, last = loweredText:find(loweredNeedle, cursor, true)
+    if not first then break end
+    table.insert(parts, text:sub(cursor, first - 1))
+    table.insert(parts, replacement)
+    cursor = last + 1
+  end
+  if cursor == 1 then return text end
+  table.insert(parts, text:sub(cursor))
+  return table.concat(parts)
+end
+
+local function appendPromptNameVariant(variants, seen, value, label)
+  value = trimText(value)
+  if value == '' then return end
+  local key = value:lower()
+  if not seen[key] then
+    seen[key] = true
+    table.insert(variants, { value = value, label = label })
+  end
+
+  local koreanShortName = koreanGivenName(value)
+  if koreanShortName ~= '' then
+    appendPromptNameVariant(variants, seen, koreanShortName, label)
+  end
+
+  local englishShortName = value:match('([^%s]+)$') or ''
+  if englishShortName ~= value and #englishShortName >= 4 then
+    appendPromptNameVariant(variants, seen, englishShortName, label)
+  end
+
+  if value:find('_', 1, true) or value:match('^extra%-') then
+    local readableKey = value:gsub('^extra[_%-]', ''):gsub('[_%-]%d+$', '')
+    appendPromptNameVariant(variants, seen, readableKey:gsub('[_%-]+', ' '), label)
+    appendPromptNameVariant(variants, seen, readableKey:gsub('_', '-'), label)
+  end
+end
+
+local function anonymizePromptPersonNames(triggerId, desc, prompt)
+  local characterCount = tonumber(desc.character_count) or 0
+  local variants = {}
+  local seen = {}
+  local canonicalAliases = canonicalLorebookAliasMap(triggerId)
+  for index, identity in ipairs(desc.identities or {}) do
+    local label = anonymousSubjectLabel(index, characterCount)
+    local name = trimText(identity.name)
+    local identityKey = trimText(identity.identity_key)
+    appendPromptNameVariant(variants, seen, name, label)
+    appendPromptNameVariant(variants, seen, identityKey, label)
+    local aliasGroup = canonicalAliases[normalizeIdentity(name)]
+      or canonicalAliases[normalizeIdentity(identityKey)]
+    for _, alias in ipairs(aliasGroup or {}) do
+      appendPromptNameVariant(variants, seen, alias, label)
+    end
+  end
+  table.sort(variants, function(left, right)
+    return #left.value > #right.value
+  end)
+  local anonymized = tostring(prompt or '')
+  for _, variant in ipairs(variants) do
+    anonymized = replacePlainCaseInsensitive(anonymized, variant.value, variant.label)
+  end
+  return anonymized
+end
+
 local function buildPresetPrompt(triggerId, desc)
   local preset = getGlobalVar(triggerId, 'toggle_lb-xnai.preset')
   if not preset or preset == '' or preset == 'null' then
@@ -1381,6 +1462,7 @@ local function buildPresetPrompt(triggerId, desc)
   }, '\n\n')
   positive = safeReplace(positive, '{prompt}', prompt)
   positive = positive:gsub('\n\n\n+', '\n\n')
+  positive = anonymizePromptPersonNames(triggerId, desc, positive)
 
   if characterCount == 1 and name ~= '' then
     local routingName = trimText(desc.identities[1].name)
@@ -1688,9 +1770,10 @@ end
             raise ValueError("Source module output hook has an unsupported layout")
         content = content.replace(policy_anchor, policy_replacement, 1)
         content = content.replace(placement_anchor, placement_replacement, 1)
-    content = content.replace(
-        "prelude.import(tid, 'lb-xnai.gen')",
+    content = re.sub(
+        r"prelude\.import\(tid, 'lb-xnai\.gen(?:\.v\d+)?'\)",
         f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+        content,
     )
     generation_anchor = """    ---@type table<string, string>
     local inlays = {}
@@ -1792,10 +1875,7 @@ end
         if slot_anchor not in content:
             raise ValueError("Source module output hook cannot attach unmatched image placement")
         content = content.replace(slot_anchor, slot_replacement, 1)
-    content = content.replace(
-        "    slotted = restoreNodes(slotted)\n",
-        """    slotted = restoreNodes(slotted)
-    local planningFailureNodes = {}
+    planning_failure_block = """    local planningFailureNodes = {}
     for _, failure in ipairs(planningFailures) do
       local label = failure.kind == 'keyvis'
         and '키비주얼'
@@ -1805,7 +1885,12 @@ end
     if #planningFailureNodes > 0 then
       slotted = slotted .. '\\n\\n' .. table.concat(planningFailureNodes, '\\n\\n')
     end
-""",
+"""
+    content = content.replace(planning_failure_block, "")
+    content = content.replace(
+        "    slotted = restoreNodes(slotted)\n",
+        """    slotted = restoreNodes(slotted)
+""" + planning_failure_block,
         1,
     )
     content = content.replace(
@@ -1826,9 +1911,10 @@ end
 def _upgrade_on_input_lua(content: str) -> str:
     """Refresh temporary identities before the planner prompt is assembled."""
 
-    content = content.replace(
-        "prelude.import(tid, 'lb-xnai.gen')",
+    content = re.sub(
+        r"prelude\.import\(tid, 'lb-xnai\.gen(?:\.v\d+)?'\)",
         f"prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')",
+        content,
     )
     import_anchor = f"local gen = prelude.import(tid, '{VERSIONED_GENERATOR_NAME}')"
     refresh_call = "gen.refreshExtraRegistry(tid)"
@@ -1912,7 +1998,7 @@ def build_module(source: Path, output: Path) -> None:
             raise ValueError(f"Source module is missing required entries: {sorted(missing)}")
 
         data["name"] = MODULE_NAME
-        data["character_version"] = "4.4.22-krea2"
+        data["character_version"] = "4.4.23-krea2"
         data["modification_date"] = int(time.time())
         extensions = _as_object(data["extensions"], "card extensions")
         risuai = _as_object(extensions["risuai"], "RisuAI extensions")
