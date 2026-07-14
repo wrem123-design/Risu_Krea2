@@ -308,6 +308,62 @@ assert(lastPromptText:find('Canonical character appearances:', 1, true),
 assert(lastPromptText:find('Previously established temporary extras:', 1, true),
   'the identity repair did not retain temporary extra context')
 
+local stagedExtraScene = {
+  name = 'Han Hye-jeong introduction', character_count = 1,
+  identities = {{
+    identity_key = 'extra-han-hye-jeong-1', name = 'Han Hye-jeong', source = 'extra',
+    appearance = 'Han Hye-jeong has a narrow oval face, shoulder-length chestnut hair, and warm brown eyes'
+  }},
+  appearance = 'Han Hye-jeong watches the workshop doorway with a cautious expression',
+  outfit = 'Han Hye-jeong wears a fitted cream cardigan over a charcoal blouse and dark trousers',
+  background = 'a quiet entrance corridor outside the humid underground electronics workshop',
+  composition = 'a medium solo arrival shot with Han Hye-jeong framed beside the half-open door',
+  details = 'cool fluorescent light preserves her face, chestnut hair, and realistic knit fabric', slot = 0
+}
+local sameResponseExtraMismatch = {
+  scenes = {{
+    name = 'Han Hye-jeong and Oh Deok-gu', character_count = 2,
+    identities = {{
+      identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+      appearance = 'Oh Deok-gu canonical physical appearance'
+    }},
+    appearance = 'Han Hye-jeong studies Oh Deok-gu while he answers with an awkward expression',
+    outfit = 'Han Hye-jeong wears her cream cardigan while Oh Deok-gu wears a stretched anime T-shirt',
+    background = 'inside the cluttered underground workshop near a desk of loose electronic components',
+    composition = 'Han Hye-jeong stands opposite Oh Deok-gu as they exchange a guarded direct gaze',
+    details = 'blue monitor light separates both faces and preserves realistic skin and fabric texture', slot = 1
+  }}
+}
+local directStagedBackfill = gen.backfillKnownIdentities(
+  'test', sameResponseExtraMismatch.scenes[1], { scenes = { stagedExtraScene } })
+assert(directStagedBackfill and #directStagedBackfill.identities == 2,
+  'the identity backfill helper could not see a valid extra from the current response')
+sameResponseExtraMismatch.scenes[1].identities = {{
+  identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+  appearance = 'Oh Deok-gu canonical physical appearance'
+}}
+queue = {
+  sameResponseExtraMismatch, sameResponseExtraMismatch,
+  sameResponseExtraMismatch, sameResponseExtraMismatch
+}
+local stagedExtraCandidate, stagedExtraFailure = gen.requestOneDescriptor(
+  'test', { scenes = { stagedExtraScene } },
+  'Han Hye-jeong entered the workshop corridor.\\n\\nHan Hye-jeong faced Oh Deok-gu inside the workshop.\\n\\nThe monitor light flickered behind them.', false)
+assert(stagedExtraCandidate and #stagedExtraCandidate.identities == 2,
+  'a new extra established earlier in the same response was unavailable to the next scene repair: ' ..
+    tostring(stagedExtraFailure))
+assert(stagedExtraFailure == '', 'same-response extra backfill retained a failure state')
+assert(#queue == 3, 'same-response extra backfill unnecessarily repeated the descriptor request')
+assert(stagedExtraCandidate.identities[2].name == 'Han Hye-jeong' and
+  stagedExtraCandidate.identities[2].source == 'extra',
+  'same-response extra backfill did not restore the missing new participant')
+assert(stagedExtraCandidate.identities[2].appearance == stagedExtraScene.identities[1].appearance,
+  'same-response extra backfill did not preserve the appearance established on first sight')
+for _, saved in ipairs(states['lb-xnai-extra-registry-v1'] or {}) do
+  assert(saved.name ~= 'Han Hye-jeong',
+    'an unvalidated same-response extra was persisted before output planning completed')
+end
+
 states['lb-xnai-extra-registry-v1'] = {
   {
     identity_key = 'kim_do_hee', name = 'Kim Do-hee',

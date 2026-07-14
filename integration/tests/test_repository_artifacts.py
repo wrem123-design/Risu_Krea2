@@ -328,9 +328,10 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("identityAppearanceLines", entries["lb-xnai.gen"])
         self.assertIn("canonicalLorebookProfiles", entries["lb-xnai.gen"])
         self.assertIn("knownIdentityProfiles", entries["lb-xnai.gen"])
+        self.assertIn("currentResponseExtraProfiles", entries["lb-xnai.gen"])
         self.assertIn("backfillKnownIdentities", entries["lb-xnai.gen"])
         self.assertIn(
-            "candidate = backfillKnownIdentities(triggerId, candidate)",
+            "candidate = backfillKnownIdentities(triggerId, candidate, response)",
             entries["lb-xnai.gen"],
         )
         self.assertIn(

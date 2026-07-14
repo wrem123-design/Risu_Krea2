@@ -661,17 +661,63 @@ local function identityMentionScore(desc, aliases)
   return bestScore, bestAlias
 end
 
-local function knownIdentityProfiles(triggerId)
+local function currentResponseExtraProfiles(triggerId, response)
+  local profiles = {}
+  if type(response) ~= 'table' then return profiles end
+  local canonicalNames = canonicalLorebookNames(triggerId)
+  local seen = {}
+  local descriptors = {}
+  if response.keyvis then table.insert(descriptors, response.keyvis) end
+  for _, descriptor in ipairs(response.scenes or {}) do table.insert(descriptors, descriptor) end
+  for _, descriptor in ipairs(descriptors) do
+    if descriptorReady(descriptor) then
+      for _, identity in ipairs(descriptor.identities or {}) do
+        local key = trimText(identity.identity_key)
+        local name = trimText(identity.name)
+        local appearance = trimText(identity.appearance)
+        local keyNorm = normalizeIdentity(key)
+        local nameNorm = normalizeIdentity(name)
+        if identity.source == 'extra'
+            and keyNorm ~= '' and nameNorm ~= '' and appearance ~= ''
+            and not canonicalNames[keyNorm] and not canonicalNames[nameNorm]
+            and not seen[keyNorm] and not seen[nameNorm] then
+          seen[keyNorm] = true
+          seen[nameNorm] = true
+          table.insert(profiles, {
+            identity_key = key,
+            name = name,
+            appearance = appearance,
+          })
+        end
+      end
+    end
+  end
+  return profiles
+end
+
+local function knownIdentityProfiles(triggerId, response)
   local profiles = canonicalLorebookProfiles(triggerId)
   local registry = getState(triggerId, 'lb-xnai-extra-registry-v1') or {}
   if type(registry) ~= 'table' then registry = {} end
   local order = #profiles
-  for _, saved in ipairs(registry) do
+  local seen = {}
+  for _, profile in ipairs(profiles) do
+    seen[normalizeIdentity(profile.identity_key)] = true
+    seen[normalizeIdentity(profile.name)] = true
+    for _, alias in ipairs(profile.aliases or {}) do seen[normalizeIdentity(alias)] = true end
+  end
+
+  local function appendExtra(saved)
     local key = trimText(saved.identity_key)
     local name = trimText(saved.name)
     local appearance = trimText(saved.appearance)
-    if key ~= '' and name ~= '' and appearance ~= '' then
+    local keyNorm = normalizeIdentity(key)
+    local nameNorm = normalizeIdentity(name)
+    if keyNorm ~= '' and nameNorm ~= '' and appearance ~= ''
+        and not seen[keyNorm] and not seen[nameNorm] then
       order = order + 1
+      seen[keyNorm] = true
+      seen[nameNorm] = true
       table.insert(profiles, {
         aliases = { name },
         identity_key = key,
@@ -682,10 +728,17 @@ local function knownIdentityProfiles(triggerId)
       })
     end
   end
+
+  for _, saved in ipairs(registry) do
+    appendExtra(saved)
+  end
+  for _, staged in ipairs(currentResponseExtraProfiles(triggerId, response)) do
+    appendExtra(staged)
+  end
   return profiles
 end
 
-local function backfillKnownIdentities(triggerId, desc)
+local function backfillKnownIdentities(triggerId, desc, response)
   local expected, actual = identityCardinalityMismatch(desc)
   if not expected or actual >= expected then return desc end
 
@@ -701,7 +754,7 @@ local function backfillKnownIdentities(triggerId, desc)
   end
 
   local candidates = {}
-  for _, profile in ipairs(knownIdentityProfiles(triggerId)) do
+  for _, profile in ipairs(knownIdentityProfiles(triggerId, response)) do
     local duplicate = existing[normalizeIdentity(profile.identity_key)] == true
     for _, alias in ipairs(profile.aliases or {}) do
       if existing[normalizeIdentity(alias)] then duplicate = true break end
@@ -1083,6 +1136,10 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
   local profileBook = prelude.getPriorityLoreBook(triggerId, 'lb-xnai.lb.extra')
   local profiles = profileBook and trimText(profileBook.content) or ''
   local extraRegistry = trimText(getChatVar(triggerId, 'lb-xnai-extra-registry-prompt'))
+  local stagedExtras = trimText(formatExtraRegistry(currentResponseExtraProfiles(triggerId, response)))
+  if stagedExtras ~= '' then
+    extraRegistry = extraRegistry == '' and stagedExtras or extraRegistry .. '\n' .. stagedExtras
+  end
   local outputShape
   if wantKeyVisual then
     outputShape = [[keyvis:
@@ -1155,7 +1212,7 @@ local function requestOneDescriptor(triggerId, response, fullChatContent, wantKe
       if not candidate then
         lastFailure = '응답에서 해석 가능한 단일 이미지 설명 구조를 찾지 못했습니다.'
       else
-        candidate = backfillKnownIdentities(triggerId, candidate)
+        candidate = backfillKnownIdentities(triggerId, candidate, response)
         if attempt >= 3 then
           candidate = mergeIdentityCardinalityRepair(identityRepairBase, candidate)
         end
