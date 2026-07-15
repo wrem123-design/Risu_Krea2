@@ -433,6 +433,36 @@ assert(knownCanonicalCandidate.identities[2].appearance:find(
   'Song Hee-jin canonical physical appearance', 1, true),
   'canonical backfill dropped the lorebook appearance')
 
+local anonymousProseCanonicalMismatch = {
+  scenes = {{
+    name = 'Oh Deok-gu', character_count = 2,
+    identities = {{
+      identity_key = 'oh_deok_gu', name = 'Oh Deok-gu', source = 'lorebook',
+      appearance = 'Oh Deok-gu canonical physical appearance'
+    }},
+    appearance = 'The primary subject and the second subject have distinct complete physical appearances',
+    outfit = 'The primary subject wears a stretched T-shirt while the second subject wears a plain shirt',
+    background = 'a humid underground workshop filled with computers and loose components',
+    composition = 'the primary subject turns from a chair while the second subject points at a metal sphere',
+    details = 'blue monitor light preserves both faces and the reflective metal surface', slot = 1
+  }}
+}
+queue = {
+  anonymousProseCanonicalMismatch, anonymousProseCanonicalMismatch,
+  anonymousProseCanonicalMismatch, anonymousProseCanonicalMismatch
+}
+local anonymousCanonicalCandidate, anonymousCanonicalFailure = gen.requestOneDescriptor(
+  'test', { scenes = {} },
+  'Oh Deok-gu turns toward the gallery door.\\n\\nSong Hee-jin joins him and points at a framed photograph.\\n\\nThe two people discuss the exhibit.', false)
+assert(anonymousCanonicalCandidate and #anonymousCanonicalCandidate.identities == 2,
+  'a canonical participant named only near the story slot was not backfilled after prompt anonymization: ' ..
+    tostring(anonymousCanonicalFailure))
+assert(#queue == 3,
+  'story-slot canonical backfill unnecessarily asked the weak model to repeat the descriptor')
+assert(anonymousCanonicalCandidate.identities[2].name == 'Song Hee-jin' and
+  anonymousCanonicalCandidate.identities[2].source == 'lorebook',
+  'story-slot canonical backfill restored the wrong missing participant')
+
 local unresolvedMismatch = {
   scenes = {{
     name = 'Oh Deok-gu and Unknown Visitor', character_count = 2,

@@ -148,6 +148,29 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("castCoverageSummary", builder.GENERATOR_LUA)
         self.assertIn("Existing cast coverage:", builder.GENERATOR_LUA)
         self.assertIn("underrepresented", builder.GENERATOR_LUA)
+
+    def test_camera_observer_rule_preserves_story_body_orientation(self) -> None:
+        """Allow rear views without turning characters toward the viewer."""
+
+        spec = importlib.util.spec_from_file_location("krea2_builder", BUILDER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+
+        self.assertNotIn(
+            "with their faces and bodies visible",
+            builder.MAIN_INSTRUCTIONS,
+        )
+        for instructions in (builder.MAIN_INSTRUCTIONS, builder.GENERATOR_LUA):
+            self.assertIn("unacknowledged observer", instructions)
+            self.assertIn("complete rear view", instructions)
+            self.assertIn("Never twist", instructions)
+            self.assertIn("direct-to-camera performance", instructions)
+        for preset in (builder.PRESET, builder.PRESET_2D):
+            self.assertIn("unacknowledged observer", preset)
+            self.assertIn("back of the head", preset)
+            self.assertIn("never turn the head or torso", preset)
         self.assertNotIn("table.insert(response.scenes, response.keyvis)", builder.GENERATOR_LUA)
         self.assertIn("insertSlots(story)", builder.GENERATOR_LUA)
         self.assertIn("copy the exact numeric N from [Slot N]", builder.GENERATOR_LUA)
@@ -305,6 +328,12 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertEqual(
             entries["프리셋 1"].strip(),
             "[Positive]\n{appearance}\n\n{outfit}\n\n{background}\n\n{composition}\n\n"
+            "the camera remains an unacknowledged observer unless the composition explicitly "
+            "describes a deliberate selfie, posed photograph, filming, direct-to-camera "
+            "performance, broadcast address, or conscious camera acknowledgment. preserve "
+            "narrative body orientation and eyelines; a complete rear view, the back of the head, "
+            "profile, silhouette, partial facial occlusion, or a face outside the frame is valid. "
+            "never turn the head or torso merely to display facial features.\n\n"
             "shot on smartphone, photorealistic real-world photography, realistic skin texture, "
             "natural optical depth of field, {details}",
         )
@@ -341,9 +370,10 @@ class RepositoryArtifactTests(unittest.TestCase):
         self.assertIn("currentResponseExtraProfiles", entries["lb-xnai.gen"])
         self.assertIn("backfillKnownIdentities", entries["lb-xnai.gen"])
         self.assertIn(
-            "candidate = backfillKnownIdentities(triggerId, candidate, response)",
+            "triggerId, candidate, response, fullChatContent)",
             entries["lb-xnai.gen"],
         )
+        self.assertIn("identityStoryMentionScore", entries["lb-xnai.gen"])
         self.assertIn(
             "Current scene appearance, expression, and temporary state:",
             entries["lb-xnai.gen"],

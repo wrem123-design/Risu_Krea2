@@ -104,6 +104,14 @@ equally meaningful supporting-character or interaction moment, but passive peopl
 are never promoted and no gender or cast quota is enforced. Focused repairs also
 receive the active balanced, strongest-moment, or later-moment selection policy and
 a summary of the characters already represented in the selected image set.
+The planner and both rendering presets treat the camera as an unacknowledged observer
+by default. Story eyelines and body orientation take priority over face visibility,
+so complete rear views, the back of the head, profiles, silhouettes, partial occlusion,
+and faces outside the frame are valid compositions. A subject may look into the lens
+only when the selected prose explicitly describes a selfie, posed photograph, filming,
+direct-to-camera performance, broadcast address, or deliberate camera acknowledgment.
+Identity appearance remains a continuity reference rather than a requirement to turn
+the face or torso toward the viewer.
 Focused repairs receive the story with its real `[Slot N]` paragraph markers and
 must copy an unused marker nearest the selected event. The fixed `slot: 0` example
 and sequential fallback assignment are removed. Invalid or duplicate slots are
@@ -133,7 +141,9 @@ may bootstrap without a canonical alias, then enters the chat-scoped temporary r
 successful generation. A known lorebook identity cannot bypass grounding by claiming `extra`.
 When a focused scene reply declares more visible people than identity rows, the generator
 first restores only canonical or chat-scoped extra profiles whose names are explicitly
-present in the descriptor prose. It preserves the scene text and character count; unknown
+present in the descriptor prose or in the paragraphs around the descriptor's selected
+story slot. This story-slot fallback covers anonymized prose that uses only `the primary
+subject` and `the second subject`. It preserves the scene text and character count; unknown
 people still use the existing focused retry path instead of being invented or dropped.
 Single-person extras still emit a routing name, but Hooking Manager applies a LoRA only
 when that exact alias was explicitly configured; ordinary unmapped extras therefore bypass it.
